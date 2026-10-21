@@ -28,6 +28,8 @@ describe('parseArgs', () => {
     assert.equal(strict.ok, false);
     const unknown = parseArgs(['lint']);
     assert.equal(unknown.ok, false);
+    const discover = parseArgs(['sync', '--discover', 'packages/*']);
+    assert.equal(discover.ok, false);
   });
 
   it('accepts sync options', () => {

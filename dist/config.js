@@ -1,5 +1,5 @@
 import { readText } from './fsutil.js';
-const ALLOWED = new Set(['env', 'example', 'schema', 'strict', 'format']);
+const ALLOWED = new Set(['env', 'example', 'schema', 'strict', 'format', 'discover']);
 export function loadConfig(path) {
     const read = readText(path);
     if (!read.ok)
@@ -48,6 +48,12 @@ export function loadConfig(path) {
             return { ok: false, message: `${path} "format" must be "human" or "json"` };
         }
         config.format = record.format;
+    }
+    if (record.discover !== undefined) {
+        const discover = normalizeEnv(record.discover);
+        if (!discover)
+            return { ok: false, message: `${path} "discover" must be a string or an array of strings` };
+        config.discover = discover;
     }
     return { ok: true, config };
 }

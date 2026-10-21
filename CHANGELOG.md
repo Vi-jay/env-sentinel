@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `--discover` finds `.env` / `.env.example` pairs (including `.env.<name>` / `.env.<name>.example`) under globbed directories and checks each pair on its own. `**` walks nested directories. `node_modules` and `.git` are skipped.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.

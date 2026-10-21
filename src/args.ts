@@ -11,6 +11,8 @@ export interface Args {
   strict: boolean;
   strictSet: boolean;
   format?: 'human' | 'json';
+  discover: string[];
+  discoverSet: boolean;
   prune: boolean;
   dryRun: boolean;
   config?: string;
@@ -44,6 +46,8 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
     schemaSet: false,
     strict: false,
     strictSet: false,
+    discover: [],
+    discoverSet: false,
     prune: false,
     dryRun: false,
     noConfig: false,
@@ -121,6 +125,16 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
         index = value.next - 1;
         break;
       }
+      case '--discover': {
+        const value = takeValue(argv, index, inline, flag);
+        if (!value.ok) return value;
+        const parts = splitList(value.value);
+        if (!parts) return { ok: false, message: '--discover needs a glob' };
+        args.discover.push(...parts);
+        args.discoverSet = true;
+        index = value.next - 1;
+        break;
+      }
       case '--schema': {
         const value = takeValue(argv, index, inline, flag);
         if (!value.ok) return value;
@@ -178,6 +192,7 @@ Options:
   -e, --env <path>       Env file. Repeatable, or comma-separated. Default: .env
   -x, --example <path>   Example file. Default: .env.example
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
+      --discover <glob>  Find .env and .env.example pairs. Repeatable (check)
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
   -f, --format <name>    human (default) or json (check)
@@ -209,6 +224,7 @@ function validateForCommand(args: Args): { ok: true; args: Args } | { ok: false;
   if (args.strictSet) return { ok: false, message: '--strict is only valid with check' };
   if (args.quiet) return { ok: false, message: '--quiet is only valid with check' };
   if (args.schemaSet) return { ok: false, message: '--schema is only valid with check' };
+  if (args.discoverSet) return { ok: false, message: '--discover is only valid with check' };
   if (args.command === 'init' && args.prune) return { ok: false, message: '--prune is only valid with sync' };
   return { ok: true, args };
 }

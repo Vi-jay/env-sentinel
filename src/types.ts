@@ -181,4 +181,6 @@ export interface FileConfig {
   schema?: string;
   strict?: boolean;
   format?: 'human' | 'json';
+  /** Globs, relative to the working directory, whose directories are searched for env pairs. */
+  discover?: string[];
 }

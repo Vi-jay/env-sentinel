@@ -191,6 +191,7 @@ env-sentinel init [options]
 | `-e, --env <path>` | all | Env file. Repeat the flag, or separate paths with commas. Default: `.env` |
 | `-x, --example <path>` | all | Example file. Default: `.env.example` |
 | `--schema <path>` | check | JSON schema, or another dotenv file |
+| `--discover <glob>` | check | Check each `.env` / `.env.example` pair under matching directories. Repeat the flag, or separate globs with commas. Replaces the configured list |
 | `--strict` / `--no-strict` | check | Undocumented keys are errors, or warnings |
 | `-f, --format <human\|json>` | check | Default: `human` |
 | `--quiet` | check | Print nothing when the human report has no errors |
@@ -217,6 +218,14 @@ Flags override the config file. Paths in a config file are relative to that file
 ```
 
 `env` may be a string or an array. Unknown fields are an error.
+
+### Monorepo
+
+`--discover 'packages/*'` checks every direct child of `packages` that contains a pair. `*` matches one path segment. `**` matches any depth, including the directory it starts from. A pair is `.env` with `.env.example`, or `.env.<name>` with `.env.<name>.example`, and both files have to exist. Each pair is checked on its own, so `packages/web/.env` is compared with `packages/web/.env.example` rather than one shared example.
+
+`node_modules`, `.git`, `dist`, `dist-test`, and `coverage` are skipped. Symbolic links are not followed. Patterns must be relative and must not contain `..`. When `--discover` is set and `--env` is not, the default `.env` is not added. When both are set, the explicit files and the discovered pairs are all checked. No matching pair is exit code 2.
+
+`discover` in `env-sentinel.config.json` is the same list of globs.
 
 ### Exit codes
 
@@ -291,7 +300,7 @@ const written = sync({
 });
 ```
 
-Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
+Also exported: `checkContents`, `combineReports`, `discoverEnvPairs`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
 
 ## Pre-commit
 
