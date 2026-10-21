@@ -31,7 +31,7 @@ describe('cli', () => {
     assert.match(help.stdout, /Values are masked/);
     const version = run(['--version'], root);
     assert.equal(version.status, 0);
-    assert.equal(version.stdout.trim(), '0.1.0');
+    assert.equal(version.stdout.trim(), '0.2.0');
   });
 
   it('checks the broken example and hides secrets in human and json output', () => {
@@ -53,7 +53,7 @@ describe('cli', () => {
     assert.equal(json.status, 1);
     const report = JSON.parse(json.stdout) as { ok: boolean; version: string; summary: { errors: number } };
     assert.equal(report.ok, false);
-    assert.equal(report.version, '0.1.0');
+    assert.equal(report.version, '0.2.0');
     assert.ok(report.summary.errors > 0);
     assert.equal(json.stdout.includes(SECRET), false);
   });
