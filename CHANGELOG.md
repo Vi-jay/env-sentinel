@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `--format github` prints GitHub Actions annotations for each finding, using the finding's file and line, then the human report. The composite action defaults to that format. Values stay masked.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.

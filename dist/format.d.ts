@@ -1,6 +1,6 @@
 import type { CheckReport } from './types.js';
 export interface FormatOptions {
-    format: 'human' | 'json';
+    format: 'human' | 'json' | 'github';
     color: boolean;
     version?: string;
 }

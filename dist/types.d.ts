@@ -152,6 +152,6 @@ export interface FileConfig {
     example?: string;
     schema?: string;
     strict?: boolean;
-    format?: 'human' | 'json';
+    format?: 'human' | 'json' | 'github';
 }
 //# sourceMappingURL=types.d.ts.map

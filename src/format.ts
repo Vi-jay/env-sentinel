@@ -1,14 +1,39 @@
 import type { CheckReport, Finding } from './types.js';
 
 export interface FormatOptions {
-  format: 'human' | 'json';
+  format: 'human' | 'json' | 'github';
   color: boolean;
   version?: string;
 }
 
 export function formatReport(report: CheckReport, options: FormatOptions): string {
   if (options.format === 'json') return `${JSON.stringify(jsonReport(report, options.version), null, 2)}\n`;
-  return formatHuman(report, options.color);
+  const human = formatHuman(report, options.color);
+  if (options.format !== 'github') return human;
+  const annotations = report.files.flatMap((file) => file.findings.map(annotationLine));
+  if (annotations.length === 0) return human;
+  return `${annotations.join('\n')}\n${human}`;
+}
+
+/** GitHub Actions workflow command. Property values and the message are percent-encoded. */
+function annotationLine(finding: Finding): string {
+  const command = finding.severity === 'error' ? 'error' : 'warning';
+  const properties = [`file=${workflowEscape(finding.file)}`];
+  if (finding.line !== undefined) properties.push(`line=${String(finding.line)}`);
+  if (finding.endLine !== undefined && finding.endLine !== finding.line) {
+    properties.push(`endLine=${String(finding.endLine)}`);
+  }
+  properties.push(`title=${workflowEscape(finding.code)}`);
+  return `::${command} ${properties.join(',')}::${workflowEscape(finding.message)}`;
+}
+
+function workflowEscape(value: string): string {
+  return value
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C');
 }
 
 function jsonReport(report: CheckReport, version: string | undefined): unknown {

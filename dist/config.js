@@ -44,8 +44,8 @@ export function loadConfig(path) {
         config.strict = record.strict;
     }
     if (record.format !== undefined) {
-        if (record.format !== 'human' && record.format !== 'json') {
-            return { ok: false, message: `${path} "format" must be "human" or "json"` };
+        if (record.format !== 'human' && record.format !== 'json' && record.format !== 'github') {
+            return { ok: false, message: `${path} "format" must be "human", "json", or "github"` };
         }
         config.format = record.format;
     }

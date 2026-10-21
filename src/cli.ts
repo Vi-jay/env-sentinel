@@ -70,7 +70,7 @@ interface Settings {
   examplePath?: string;
   schemaPath?: string;
   strict: boolean;
-  format: 'human' | 'json';
+  format: 'human' | 'json' | 'github';
 }
 
 function resolveSettings(args: Args, cwd: string): { ok: true; settings: Settings } | { ok: false; message: string } {

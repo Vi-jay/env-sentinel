@@ -113,8 +113,8 @@ export function parseArgs(argv) {
                 const value = takeValue(argv, index, inline, flag);
                 if (!value.ok)
                     return value;
-                if (value.value !== 'human' && value.value !== 'json') {
-                    return { ok: false, message: '--format must be human or json' };
+                if (value.value !== 'human' && value.value !== 'json' && value.value !== 'github') {
+                    return { ok: false, message: '--format must be human, json, or github' };
                 }
                 args.format = value.value;
                 index = value.next - 1;
@@ -160,7 +160,7 @@ Options:
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
-  -f, --format <name>    human (default) or json (check)
+  -f, --format <name>    human (default), json, or github (check)
       --prune            Drop example keys that are not in the env file (sync)
       --dry-run          Print the example, do not write (sync, init)
       --quiet            Print nothing when check succeeds
