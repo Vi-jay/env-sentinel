@@ -1,10 +1,14 @@
+import { expandValue } from './expand.js';
 import type { TypeSpec } from './types.js';
 
 const BOOLS = new Set(['true', 'false', '1', '0', 'yes', 'no', 'on', 'off']);
 
-/** True when the value is only a `$NAME` or `${NAME}` reference, or contains one. */
+/**
+ * True when the value contains `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME-default}`.
+ * An unclosed `${` is not a reference.
+ */
 export function containsInterpolation(value: string): boolean {
-  return /\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*/.test(value);
+  return expandValue(value, () => '').hasReference;
 }
 
 /**

@@ -14,6 +14,8 @@ export type FindingCode =
   | 'malformed'
   | 'unclosed-quote'
   | 'type-mismatch'
+  | 'undefined-var'
+  | 'circular-ref'
   | 'unknown-type'
   | 'schema-invalid'
   | 'file-not-found'

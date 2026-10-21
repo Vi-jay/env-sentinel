@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from 'node:path';
 
+import { expandValue, type ExpandLookup } from './expand.js';
 import { maskSecret, valueLength } from './mask.js';
 import { parseEnv } from './parse.js';
 import { loadSchemaFromContents, mergeSchemas } from './schema.js';
@@ -9,9 +10,10 @@ import type {
   CheckReport,
   FileReport,
   Finding,
+  ParsedEntry,
   Schema,
 } from './types.js';
-import { containsInterpolation, typeProblem } from './validate.js';
+import { typeProblem } from './validate.js';
 import { readText } from './fsutil.js';
 
 export function check(options: CheckOptions): CheckReport {
@@ -105,6 +107,11 @@ export function checkContents(input: CheckContentsInput): FileReport {
   }
 
   const schemaNames = new Set(input.schema.variables.map((variable) => variable.name));
+  const lookup: ExpandLookup = (name) => {
+    const target = parsed.variables.get(name);
+    if (!target?.wellFormed) return undefined;
+    return target.value;
+  };
 
   for (const variable of input.schema.variables) {
     const entry = parsed.variables.get(variable.name);
@@ -137,8 +144,10 @@ export function checkContents(input: CheckContentsInput): FileReport {
       }
       continue;
     }
-    if (!variable.type || containsInterpolation(entry.value)) continue;
-    const problem = typeProblem(variable.type, entry.value);
+    const inspected = inspectExpansion(entry, input.env.path, lookup);
+    findings.push(...inspected.findings);
+    if (inspected.expanded === null || !variable.type) continue;
+    const problem = typeProblem(variable.type, inspected.expanded);
     if (!problem) continue;
     findings.push({
       severity: 'error',
@@ -148,8 +157,8 @@ export function checkContents(input: CheckContentsInput): FileReport {
       line: entry.line,
       endLine: entry.endLine,
       key: variable.name,
-      maskedValue: maskSecret(entry.value),
-      valueLength: valueLength(entry.value),
+      maskedValue: maskSecret(inspected.expanded),
+      valueLength: valueLength(inspected.expanded),
     });
   }
 
@@ -164,6 +173,8 @@ export function checkContents(input: CheckContentsInput): FileReport {
       line: entry.line,
       key: entry.key,
     });
+    if (!entry.wellFormed || entry.value.trim() === '') continue;
+    findings.push(...inspectExpansion(entry, input.env.path, lookup).findings);
   }
 
   findings.sort(compareFindings);
@@ -260,6 +271,55 @@ function finish(files: FileReport[], strict: boolean): CheckReport {
     files,
     summary: { errors, warnings },
   };
+}
+
+function inspectExpansion(
+  entry: ParsedEntry,
+  file: string,
+  lookup: ExpandLookup,
+): { findings: Finding[]; expanded: string | null } {
+  const expansion = expandValue(entry.value, lookup);
+  if (!expansion.hasReference && expansion.ok) {
+    return { findings: [], expanded: entry.value };
+  }
+  const base = {
+    file,
+    line: entry.line,
+    endLine: entry.endLine,
+    key: entry.key,
+  };
+  if (expansion.depthExceeded || expansion.circularNames.length > 0) {
+    const findings: Finding[] = [];
+    if (expansion.depthExceeded) {
+      findings.push({
+        severity: 'error',
+        code: 'circular-ref',
+        message: 'Variable expansion exceeded the maximum depth',
+        ...base,
+      });
+    }
+    for (const name of expansion.circularNames) {
+      findings.push({
+        severity: 'error',
+        code: 'circular-ref',
+        message: `Circular reference while expanding ${name}`,
+        ...base,
+      });
+    }
+    return { findings, expanded: null };
+  }
+  if (expansion.undefinedNames.length > 0) {
+    return {
+      findings: expansion.undefinedNames.map((name) => ({
+        severity: 'error' as const,
+        code: 'undefined-var' as const,
+        message: `References undefined variable ${name}`,
+        ...base,
+      })),
+      expanded: null,
+    };
+  }
+  return { findings: [], expanded: expansion.value };
 }
 
 function compareFindings(a: Finding, b: Finding): number {
