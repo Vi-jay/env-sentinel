@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { HELP, parseArgs, type Args } from './args.js';
-import { check } from './check.js';
-import { loadConfig } from './config.js';
+import { check, combineReports } from './check.js';
+import { discoverEnvPairs } from './discover.js';
+import { loadConfig, loadPackageConfig } from './config.js';
 import { formatReport } from './format.js';
 import { sync } from './sync.js';
 import type { CheckReport, FileConfig, SyncResult } from './types.js';
@@ -37,13 +38,43 @@ export function main(argv: string[], cwd = process.cwd()): number {
   const settings = configured.settings;
 
   if (args.command === 'check') {
-    const report = check({
-      cwd,
-      envPaths: settings.envPaths,
-      ...(settings.examplePath ? { examplePath: settings.examplePath } : {}),
-      ...(settings.schemaPath ? { schemaPath: settings.schemaPath } : {}),
-      strict: settings.strict,
-    });
+    const reports: CheckReport[] = [];
+    if (args.envSet || settings.discover.length === 0) {
+      reports.push(
+        check({
+          cwd,
+          envPaths: settings.envPaths,
+          ...(settings.examplePath ? { examplePath: settings.examplePath } : {}),
+          ...(settings.schemaPath ? { schemaPath: settings.schemaPath } : {}),
+          strict: settings.strict,
+          ignore: settings.ignore,
+        }),
+      );
+    }
+    if (settings.discover.length > 0) {
+      const found = discoverEnvPairs(cwd, settings.discover);
+      if (!found.ok) {
+        process.stderr.write(`env-sentinel: ${found.message}\n`);
+        return 2;
+      }
+      if (found.pairs.length === 0) {
+        process.stderr.write('env-sentinel: no .env and .env.example pairs matched\n');
+        return 2;
+      }
+      for (const pair of found.pairs) {
+        reports.push(
+          check({
+            cwd,
+            envPaths: [pair.envPath],
+            examplePath: pair.examplePath,
+            strict: settings.strict,
+            ignore: settings.ignore,
+          }),
+        );
+      }
+    }
+    const report = reports.length === 1 ? reports[0] : combineReports(reports, settings.strict);
+    if (!report) return 2;
     const color = settings.format === 'json' ? false : useColor(args.color);
     const text = formatReport(report, { format: settings.format, color, version: readVersion() });
     if (!(args.quiet && settings.format === 'human' && report.ok)) process.stdout.write(text);
@@ -54,15 +85,39 @@ export function main(argv: string[], cwd = process.cwd()): number {
     process.stderr.write(`env-sentinel: unknown command "${args.command}"\n`);
     return 2;
   }
+  if (args.interactive && !process.stdin.isTTY) {
+    process.stderr.write('env-sentinel: --interactive needs a terminal\n');
+    return 2;
+  }
   const result = sync({
     cwd,
     envPaths: settings.envPaths,
     examplePath: settings.examplePath ?? '.env.example',
     prune: args.prune,
     dryRun: args.dryRun,
+    fix: args.fix,
+    ...(args.interactive ? { confirm: confirmFromTerminal } : {}),
     command: args.command,
   });
   return reportSync(result, args.dryRun);
+}
+
+function confirmFromTerminal(key: string): boolean {
+  process.stderr.write(`Add ${key} from the example? [y/N] `);
+  let text = '';
+  const buffer = Buffer.alloc(256);
+  try {
+    for (;;) {
+      const bytes = readSync(process.stdin.fd, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      text += buffer.subarray(0, bytes).toString('utf8');
+      if (text.includes('\n')) break;
+    }
+  } catch {
+    return false;
+  }
+  const answer = text.trim().toLowerCase();
+  return answer === 'y' || answer === 'yes';
 }
 
 interface Settings {
@@ -71,6 +126,8 @@ interface Settings {
   schemaPath?: string;
   strict: boolean;
   format: 'human' | 'json' | 'github';
+  discover: string[];
+  ignore: string[];
 }
 
 function resolveSettings(args: Args, cwd: string): { ok: true; settings: Settings } | { ok: false; message: string } {
@@ -91,26 +148,37 @@ function resolveSettings(args: Args, cwd: string): { ok: true; settings: Setting
     configDir = dirname(configPath);
   }
 
-  const envSource = args.envSet ? args.env : (config.env ?? ['.env']);
+  let packaged: FileConfig = {};
+  if (!args.noConfig) {
+    const loadedPackage = loadPackageConfig(cwd);
+    if (!loadedPackage.ok) return loadedPackage;
+    packaged = loadedPackage.config ?? {};
+  }
+
+  const envSource = args.envSet ? args.env : (config.env ?? packaged.env ?? ['.env']);
   const envBase = args.envSet ? cwd : config.env ? configDir : cwd;
   const envPaths = envSource.map((file) => locate(file, envBase, cwd));
 
-  const exampleSet = args.exampleSet || config.example !== undefined;
-  const schemaSet = args.schemaSet || config.schema !== undefined;
+  const exampleSet = args.exampleSet || config.example !== undefined || packaged.example !== undefined;
+  const schemaSet = args.schemaSet || config.schema !== undefined || packaged.schema !== undefined;
   let examplePath: string | undefined;
   let schemaPath: string | undefined;
   if (args.exampleSet && args.example) examplePath = locate(args.example, cwd, cwd);
   else if (config.example) examplePath = locate(config.example, configDir, cwd);
+  else if (packaged.example) examplePath = packaged.example;
   if (args.schemaSet && args.schema) schemaPath = locate(args.schema, cwd, cwd);
   else if (config.schema) schemaPath = locate(config.schema, configDir, cwd);
+  else if (packaged.schema) schemaPath = packaged.schema;
 
   if (args.command === 'check' && !exampleSet && !schemaSet) examplePath = '.env.example';
   if (args.command !== 'check' && !examplePath) examplePath = '.env.example';
 
   const settings: Settings = {
     envPaths,
-    strict: args.strictSet ? args.strict : (config.strict ?? false),
-    format: args.format ?? config.format ?? 'human',
+    strict: args.strictSet ? args.strict : (config.strict ?? packaged.strict ?? false),
+    format: args.format ?? config.format ?? packaged.format ?? 'human',
+    discover: args.discoverSet ? args.discover : (config.discover ?? packaged.discover ?? []),
+    ignore: args.ignoreSet ? args.ignore : (config.ignore ?? packaged.ignore ?? []),
   };
   if (examplePath) settings.examplePath = examplePath;
   if (schemaPath) settings.schemaPath = schemaPath;
@@ -143,22 +211,36 @@ function reportSync(result: SyncResult, dryRun: boolean): number {
         ? `env-sentinel: dry run, ${result.path} was not written\n`
         : `env-sentinel: dry run, ${result.path} is already up to date\n`,
     );
+    reportFill(result, true);
     process.stdout.write(result.contents);
     return 0;
   }
   if (result.wrote && result.created) {
     process.stdout.write(`Created ${result.path} (${String(result.added.length)} keys, values omitted)\n`);
-    return 0;
-  }
-  if (result.wrote) {
+  } else if (result.wrote) {
     const parts = [`Updated ${result.path}`];
     if (result.added.length > 0) parts.push(`+${formatKeys(result.added)}`);
     if (result.removed.length > 0) parts.push(`-${formatKeys(result.removed)}`);
     process.stdout.write(`${parts.join(' ')}\n`);
-    return 0;
+  } else {
+    process.stdout.write(`${result.path} is already up to date\n`);
   }
-  process.stdout.write(`${result.path} is already up to date\n`);
+  reportFill(result, false);
   return 0;
+}
+
+function reportFill(result: SyncResult, dryRun: boolean): void {
+  const fill = result.envFill;
+  if (!fill || (fill.added.length === 0 && fill.declined.length === 0)) return;
+  const sink = dryRun ? process.stderr : process.stdout;
+  const prefix = dryRun ? 'env-sentinel: ' : '';
+  if (fill.added.length > 0) {
+    const verb = dryRun || !fill.wrote ? 'Would add to' : 'Added to';
+    sink.write(`${prefix}${verb} ${fill.path}: ${formatKeys(fill.added)}\n`);
+  }
+  if (fill.declined.length > 0) {
+    sink.write(`${prefix}${dryRun ? 'Would skip' : 'Skipped'} ${formatKeys(fill.declined)}\n`);
+  }
 }
 
 function formatKeys(keys: string[]): string {

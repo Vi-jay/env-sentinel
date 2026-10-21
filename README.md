@@ -108,6 +108,8 @@ PORT=
 | `missing` | A required key is absent | error |
 | `empty` | A required value is empty or whitespace | error |
 | `type-mismatch` | The value does not match `@type` | error |
+| `undefined-var` | The value references a name that is not set in the same file | error |
+| `circular-ref` | Expansion refers to itself, or the chain is deeper than 32 | error |
 | `duplicate` | The same key is assigned again. The last value wins | error |
 | `malformed` | The line is not `KEY=VALUE`, or junk follows a quoted value | error |
 | `unclosed-quote` | A quoted value never closes | error |
@@ -119,7 +121,7 @@ PORT=
 
 Keys are required unless marked optional. Each `--env` file is checked on its own against the same contract. `.env.production` should be a complete file. A partial overlay such as `.env.local` reports every required key it does not repeat.
 
-A value that contains `$NAME` or `${NAME}` is not type-checked. The variable is not expanded. An empty required value is still an error.
+A value may reference other keys in the same file with `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME-default}`. `:-` uses the default when the name is unset or empty. `-` uses the default only when the name is unset. Names are resolved only inside that file, not across other `--env` files. A reference to a missing name is `undefined-var`. A cycle, or a chain deeper than 32, is `circular-ref`. When every reference resolves, `@type` is checked against the expanded value, and the report still masks it. The expansion is not written back to the file. An unclosed `${` is literal text and is not expanded. An empty required value is still an error before expansion. Nested defaults such as `${HOST:-${FALLBACK}}` are expanded.
 
 ## Annotations
 
@@ -191,10 +193,14 @@ env-sentinel init [options]
 | `-e, --env <path>` | all | Env file. Repeat the flag, or separate paths with commas. Default: `.env` |
 | `-x, --example <path>` | all | Example file. Default: `.env.example` |
 | `--schema <path>` | check | JSON schema, or another dotenv file |
+| `--discover <glob>` | check | Check each `.env` / `.env.example` pair under matching directories. Repeat the flag, or separate globs with commas. Replaces the configured list |
 | `--strict` / `--no-strict` | check | Undocumented keys are errors, or warnings |
+| `--ignore <glob>` | check | Skip extra-key findings whose names match. Repeat the flag, or separate patterns with commas. `*` matches any characters and `?` matches one. Replaces the configured list |
 | `-f, --format <human\|json\|github>` | check | Default: `human`. `github` adds Actions annotations before the human report |
 | `--quiet` | check | Print nothing when the human report has no errors |
 | `--prune` | sync | Remove example keys that are not in the env file, including the comments attached to them |
+| `--fix` | sync | Append example keys that are missing from the first env file. Existing values, including empty ones, are left unchanged |
+| `--interactive` | sync | Ask before each key `--fix` would add. Requires a terminal, and exits 2 otherwise |
 | `--dry-run` | sync, init | Print the example on stdout. Do not write |
 | `--config <path>` | all | Config file. Default: `env-sentinel.config.json` in the working directory |
 | `--no-config` | all | Ignore the config file |
@@ -202,7 +208,7 @@ env-sentinel init [options]
 | `-h, --help` | | Help |
 | `-v, --version` | | Version |
 
-Flags override the config file. Paths in a config file are relative to that file. Paths on the command line are relative to the working directory.
+Command-line flags override `env-sentinel.config.json`, which overrides the `env-sentinel` key in `package.json`. `--no-config` skips both. Paths in a config file are relative to that file. Paths in `package.json` and on the command line are relative to the working directory. `package.json` is read from the working directory only.
 
 ### Config file
 
@@ -212,11 +218,22 @@ Flags override the config file. Paths in a config file are relative to that file
   "example": ".env.example",
   "schema": "env.schema.json",
   "strict": false,
-  "format": "human"
+  "format": "human",
+  "ignore": ["DEBUG", "*_TOKEN"]
 }
 ```
 
-`env` may be a string or an array. Unknown fields are an error.
+The same object may live under the `env-sentinel` key in `package.json`. A field set in `env-sentinel.config.json` wins over the same field in `package.json`. An omitted field falls through.
+
+`env` may be a string or an array. `ignore` is an array of key names or globs. It suppresses undocumented-key findings only. A required key that matches a pattern is still reported when it is missing, empty, or the wrong type. Unknown fields are an error.
+
+### Monorepo
+
+`--discover 'packages/*'` checks every direct child of `packages` that contains a pair. `*` matches one path segment. `**` matches any depth, including the directory it starts from. A pair is `.env` with `.env.example`, or `.env.<name>` with `.env.<name>.example`, and both files have to exist. Each pair is checked on its own, so `packages/web/.env` is compared with `packages/web/.env.example` rather than one shared example.
+
+`node_modules`, `.git`, `dist`, `dist-test`, and `coverage` are skipped. Symbolic links are not followed. Patterns must be relative and must not contain `..`. When `--discover` is set and `--env` is not, the default `.env` is not added. When both are set, the explicit files and the discovered pairs are all checked. No matching pair is exit code 2.
+
+`discover` in `env-sentinel.config.json` is the same list of globs.
 
 ### Exit codes
 
@@ -265,7 +282,8 @@ Both commands read one or more env files and write the example file with LF line
 - `init` fails if the example file already exists.
 - `sync` creates the file when it is missing. When it exists, existing lines are left alone, including placeholder values, and new keys are appended under `# --- synced from .env (values omitted) ---`.
 - `--prune` deletes example keys that are absent from the env files.
-- The write is atomic: a temp file in the same directory is renamed into place.
+- `--fix` appends keys that are in the example and missing from the first env file. The appended text is that key's block from the example, including its placeholder and attached comments. Keys already present in the env file are not rewritten. Later `--env` files are not modified. Declined keys are left out when `--interactive` is set. Without a terminal, `--interactive` exits 2.
+- The write is atomic: a temp file in the same directory is renamed into place. The example and the env file are separate writes.
 - If a generated comment contains an env value of 8 or more characters, the write is refused and nothing is written. All-digit values are ignored, as are these exact placeholders: `true`, `false`, `yes`, `no`, `development`, `production`, `test`, `staging`, `localhost`, `changeme`, `placeholder`, `example`, `postgres`, `mysql`, `redis`, `mongodb`, `password`, `secret`. Shorter values repeated in a comment are not detected. Do not put secrets in comments.
 
 `parseEnv` returns real values. Do not log a parse result. Use `maskSecret` or the check report.
@@ -291,7 +309,7 @@ const written = sync({
 });
 ```
 
-Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
+Also exported: `checkContents`, `combineReports`, `discoverEnvPairs`, `parseEnv`, `expandValue`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `fillMissingKeys`, `loadConfig`, `loadPackageConfig`, `ignoreMatch`, `maskSecret`, and the result types.
 
 ## Pre-commit
 

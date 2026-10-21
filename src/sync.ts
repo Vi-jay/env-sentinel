@@ -2,9 +2,10 @@ import { isAbsolute, resolve } from 'node:path';
 
 import { fileExists, readText, writeTextAtomic } from './fsutil.js';
 import { parseEnv } from './parse.js';
-import type { ParseResult, ParsedEntry, SyncMessage, SyncOptions, SyncResult } from './types.js';
+import type { EnvFill, ParseResult, ParsedEntry, SyncMessage, SyncOptions, SyncResult } from './types.js';
 
 const HEADER = '# --- synced from .env (values omitted) ---';
+const FILL_HEADER = '# --- added by env-sentinel sync --fix ---';
 
 const COMMON_VALUES = new Set([
   'true',
@@ -84,17 +85,22 @@ export function sync(options: SyncOptions): SyncResult {
   if (!exists) {
     const leaked = leakedKeys(merged.contents, merged.entries);
     if (leaked.length > 0) return refusal(examplePath, leaked, messages);
-    return writeResult({
-      path: examplePath,
-      absolute: exampleAbsolute,
-      contents: merged.contents,
-      created: true,
-      previous: null,
-      added: envKeyList,
-      removed: [],
-      messages,
-      dryRun: options.dryRun ?? false,
-    });
+    return attachFill(
+      writeResult({
+        path: examplePath,
+        absolute: exampleAbsolute,
+        contents: merged.contents,
+        created: true,
+        previous: null,
+        added: envKeyList,
+        removed: [],
+        messages,
+        dryRun: options.dryRun ?? false,
+      }),
+      options,
+      cwd,
+      primaryEnv(envParts),
+    );
   }
 
   const exampleRead = readText(exampleAbsolute);
@@ -131,17 +137,92 @@ export function sync(options: SyncOptions): SyncResult {
     contents = appendSection(pruned.contents, selected);
   }
 
-  return writeResult({
-    path: examplePath,
-    absolute: exampleAbsolute,
-    contents: ensureTrailingNewline(contents),
-    created: false,
-    previous: exampleRead.contents,
-    added: toAdd,
-    removed: pruned.removed,
-    messages,
-    dryRun: options.dryRun ?? false,
-  });
+  return attachFill(
+    writeResult({
+      path: examplePath,
+      absolute: exampleAbsolute,
+      contents: ensureTrailingNewline(contents),
+      created: false,
+      previous: exampleRead.contents,
+      added: toAdd,
+      removed: pruned.removed,
+      messages,
+      dryRun: options.dryRun ?? false,
+    }),
+    options,
+    cwd,
+    primaryEnv(envParts),
+  );
+}
+
+/**
+ * Append example keys that are absent from `envContents`.
+ * Copies each example placeholder block. Does not change keys that already exist, including empty ones.
+ */
+export function fillMissingKeys(
+  envContents: string,
+  exampleContents: string,
+  confirm?: (key: string) => boolean,
+): { contents: string; added: string[]; declined: string[] } {
+  const example = parseEnv(exampleContents);
+  const present = new Set(parseEnv(envContents).entries.map((entry) => entry.key));
+  const added: string[] = [];
+  const declined: string[] = [];
+  const seen = new Set<string>();
+  let blocks = '';
+  for (const entry of example.entries) {
+    if (!entry.wellFormed || seen.has(entry.key)) continue;
+    seen.add(entry.key);
+    if (present.has(entry.key)) continue;
+    if (confirm && !confirm(entry.key)) {
+      declined.push(entry.key);
+      continue;
+    }
+    let block = exampleContents.slice(entry.blockStart, entry.blockEnd);
+    if (block.length === 0) continue;
+    if (!block.endsWith('\n')) block += '\n';
+    blocks += block;
+    added.push(entry.key);
+  }
+  if (added.length === 0) return { contents: envContents, added, declined };
+  const header = envContents.includes(FILL_HEADER) ? '' : `${FILL_HEADER}\n`;
+  const base = envContents.length === 0 ? '' : envContents.endsWith('\n') ? envContents : `${envContents}\n`;
+  const gap = base.length === 0 || header.length === 0 ? '' : '\n';
+  return { contents: `${base}${gap}${header}${blocks}`, added, declined };
+}
+
+function primaryEnv(parts: { path: string; contents: string }[]): { path: string; contents: string } | null {
+  return parts[0] ?? null;
+}
+
+function attachFill(
+  result: SyncResult,
+  options: SyncOptions,
+  cwd: string,
+  env: { path: string; contents: string } | null,
+): SyncResult {
+  if (!options.fix || !env) return result;
+  if (result.refused || result.messages.some((message) => message.severity === 'error')) return result;
+  if (result.contents.length === 0) return result;
+  const filled = fillMissingKeys(env.contents, result.contents, options.confirm);
+  const envFill: EnvFill = {
+    path: env.path,
+    added: filled.added,
+    declined: filled.declined,
+    changed: filled.contents !== env.contents,
+    wrote: false,
+  };
+  if (!envFill.changed || options.dryRun) return { ...result, envFill };
+  const absolute = isAbsolute(env.path) ? env.path : resolve(cwd, env.path);
+  const written = writeTextAtomic(absolute, filled.contents);
+  if (!written.ok) {
+    return {
+      ...result,
+      envFill,
+      messages: [...result.messages, { severity: 'error', message: written.message }],
+    };
+  }
+  return { ...result, envFill: { ...envFill, wrote: true } };
 }
 
 function emptyResult(path: string, messages: SyncMessage[]): SyncResult {

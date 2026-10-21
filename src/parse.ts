@@ -10,8 +10,8 @@ import type { ParseDiagnostic, ParseResult, ParsedEntry, QuoteStyle } from './ty
  * - multiline quoted values
  * - double-quote escapes (`\n`, `\r`, `\t`, `\\`, `\"`, `\'`, `\``, `\$`, `\uXXXX`)
  * - single-quote escapes (`\\`, `\'` only)
- * - full-line `#` comments and inline comments (a `#` ends an unquoted value only
- *   when whitespace precedes it)
+ * - full-line `#` comments and inline comments (a `#` ends an unquoted value when
+ *   it is the first value character, or when whitespace precedes it)
  * - duplicate keys (recorded; the last assignment wins in `variables`)
  * - CRLF, lone CR, and a leading UTF-8 BOM
  *
