@@ -14,6 +14,8 @@ export type FindingCode =
   | 'malformed'
   | 'unclosed-quote'
   | 'type-mismatch'
+  | 'undefined-var'
+  | 'circular-ref'
   | 'unknown-type'
   | 'schema-invalid'
   | 'file-not-found'
@@ -134,12 +136,18 @@ export interface CheckOptions {
   examplePath?: string;
   schemaPath?: string;
   strict?: boolean;
+  /**
+   * Extra keys matching any of these names or globs are not reported.
+   * `*` matches any characters. `?` matches one. Schema keys are still checked.
+   */
+  ignore?: string[];
 }
 
 export interface CheckContentsInput {
   schema: Schema;
   env: { path: string; contents: string };
   strict?: boolean;
+  ignore?: string[];
 }
 
 export type SyncCommand = 'sync' | 'init';
@@ -162,6 +170,18 @@ export interface SyncResult {
   added: string[];
   removed: string[];
   messages: SyncMessage[];
+  /** Set when `sync` was asked to add missing example keys to the first env file. */
+  envFill?: EnvFill;
+}
+
+/** Keys appended to an env file by `sync --fix`. Values already in the file are not changed. */
+export interface EnvFill {
+  path: string;
+  added: string[];
+  /** Missing keys the confirm callback rejected. */
+  declined: string[];
+  changed: boolean;
+  wrote: boolean;
 }
 
 export interface SyncOptions {
@@ -171,6 +191,16 @@ export interface SyncOptions {
   examplePath: string;
   prune?: boolean;
   dryRun?: boolean;
+  /**
+   * Append keys that are in the example but missing from the first env file.
+   * The appended lines are the example's own placeholder lines. Existing env values are not changed.
+   */
+  fix?: boolean;
+  /**
+   * Called once per missing key when `fix` is set. Return false to leave that key out.
+   * Defaults to accepting every missing key.
+   */
+  confirm?: (key: string) => boolean;
   /** `init` refuses when the example file already exists. `sync` creates or updates it. */
   command: SyncCommand;
 }
@@ -183,4 +213,6 @@ export interface FileConfig {
   format?: 'human' | 'json';
   /** Globs, relative to the working directory, whose directories are searched for env pairs. */
   discover?: string[];
+  /** Extra-key globs. `*` matches any characters and `?` matches one. */
+  ignore?: string[];
 }

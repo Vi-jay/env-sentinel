@@ -20,8 +20,12 @@ export function parseArgs(argv) {
         strictSet: false,
         discover: [],
         discoverSet: false,
+        ignore: [],
+        ignoreSet: false,
         prune: false,
         dryRun: false,
+        fix: false,
+        interactive: false,
         noConfig: false,
         quiet: false,
         help: command === 'help',
@@ -61,6 +65,13 @@ export function parseArgs(argv) {
                 break;
             case '--dry-run':
                 args.dryRun = true;
+                break;
+            case '--fix':
+                args.fix = true;
+                break;
+            case '--interactive':
+                args.interactive = true;
+                args.fix = true;
                 break;
             case '--quiet':
                 args.quiet = true;
@@ -108,6 +119,18 @@ export function parseArgs(argv) {
                     return { ok: false, message: '--discover needs a glob' };
                 args.discover.push(...parts);
                 args.discoverSet = true;
+                index = value.next - 1;
+                break;
+            }
+            case '--ignore': {
+                const value = takeValue(argv, index, inline, flag);
+                if (!value.ok)
+                    return value;
+                const parts = splitList(value.value);
+                if (!parts)
+                    return { ok: false, message: '--ignore needs a key or glob' };
+                args.ignore.push(...parts);
+                args.ignoreSet = true;
                 index = value.next - 1;
                 break;
             }
@@ -175,8 +198,11 @@ Options:
       --discover <glob>  Find .env and .env.example pairs. Repeatable (check)
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
+      --ignore <glob>    Do not report extra keys that match. Repeatable (check)
   -f, --format <name>    human (default) or json (check)
       --prune            Drop example keys that are not in the env file (sync)
+      --fix              Append missing example keys to the first env file (sync)
+      --interactive      Prompt before each key added by --fix (sync, terminal only)
       --dry-run          Print the example, do not write (sync, init)
       --quiet            Print nothing when check succeeds
       --config <path>    Config file. Default: env-sentinel.config.json
@@ -191,7 +217,8 @@ Exit codes:
   1  Validation errors
   2  Usage error, unreadable file, or sync refused to write
 
-Values are masked in every report. sync and init never copy assignment values.
+Values are masked in every report. sync and init never copy env values into the example.
+sync --fix copies example lines into the first env file only for keys that are not already there.
 `;
 function validateForCommand(args) {
     if (args.command === 'check') {
@@ -199,6 +226,10 @@ function validateForCommand(args) {
             return { ok: false, message: '--prune is only valid with sync' };
         if (args.dryRun)
             return { ok: false, message: '--dry-run is only valid with sync or init' };
+        if (args.fix)
+            return { ok: false, message: '--fix is only valid with sync' };
+        if (args.interactive)
+            return { ok: false, message: '--interactive is only valid with sync' };
         return { ok: true, args };
     }
     if (args.format)
@@ -211,8 +242,13 @@ function validateForCommand(args) {
         return { ok: false, message: '--schema is only valid with check' };
     if (args.discoverSet)
         return { ok: false, message: '--discover is only valid with check' };
+    if (args.ignoreSet)
+        return { ok: false, message: '--ignore is only valid with check' };
     if (args.command === 'init' && args.prune)
         return { ok: false, message: '--prune is only valid with sync' };
+    if (args.command === 'init' && (args.fix || args.interactive)) {
+        return { ok: false, message: '--fix and --interactive are only valid with sync' };
+    }
     return { ok: true, args };
 }
 function splitList(value) {

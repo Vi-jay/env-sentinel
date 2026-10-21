@@ -9,4 +9,13 @@ export declare function renderExample(contents: string): {
     messages: SyncMessage[];
 };
 export declare function sync(options: SyncOptions): SyncResult;
+/**
+ * Append example keys that are absent from `envContents`.
+ * Copies each example placeholder block. Does not change keys that already exist, including empty ones.
+ */
+export declare function fillMissingKeys(envContents: string, exampleContents: string, confirm?: (key: string) => boolean): {
+    contents: string;
+    added: string[];
+    declined: string[];
+};
 //# sourceMappingURL=sync.d.ts.map
