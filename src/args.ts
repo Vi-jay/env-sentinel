@@ -11,6 +11,8 @@ export interface Args {
   strict: boolean;
   strictSet: boolean;
   format?: 'human' | 'json';
+  ignore: string[];
+  ignoreSet: boolean;
   prune: boolean;
   dryRun: boolean;
   config?: string;
@@ -44,6 +46,8 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
     schemaSet: false,
     strict: false,
     strictSet: false,
+    ignore: [],
+    ignoreSet: false,
     prune: false,
     dryRun: false,
     noConfig: false,
@@ -121,6 +125,16 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
         index = value.next - 1;
         break;
       }
+      case '--ignore': {
+        const value = takeValue(argv, index, inline, flag);
+        if (!value.ok) return value;
+        const parts = splitList(value.value);
+        if (!parts) return { ok: false, message: '--ignore needs a key or glob' };
+        args.ignore.push(...parts);
+        args.ignoreSet = true;
+        index = value.next - 1;
+        break;
+      }
       case '--schema': {
         const value = takeValue(argv, index, inline, flag);
         if (!value.ok) return value;
@@ -180,6 +194,7 @@ Options:
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
+      --ignore <glob>    Do not report extra keys that match. Repeatable (check)
   -f, --format <name>    human (default) or json (check)
       --prune            Drop example keys that are not in the env file (sync)
       --dry-run          Print the example, do not write (sync, init)
@@ -207,8 +222,9 @@ function validateForCommand(args: Args): { ok: true; args: Args } | { ok: false;
   }
   if (args.format) return { ok: false, message: '--format is only valid with check' };
   if (args.strictSet) return { ok: false, message: '--strict is only valid with check' };
-  if (args.quiet) return { ok: false, message: '--quiet is only valid with check' };
-  if (args.schemaSet) return { ok: false, message: '--schema is only valid with check' };
+    if (args.quiet) return { ok: false, message: '--quiet is only valid with check' };
+    if (args.schemaSet) return { ok: false, message: '--schema is only valid with check' };
+    if (args.ignoreSet) return { ok: false, message: '--ignore is only valid with check' };
   if (args.command === 'init' && args.prune) return { ok: false, message: '--prune is only valid with sync' };
   return { ok: true, args };
 }

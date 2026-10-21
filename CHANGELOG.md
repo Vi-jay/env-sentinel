@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Settings can come from the `env-sentinel` key in `package.json`. `env-sentinel.config.json` overrides it field by field, and flags override both. `ignore` (or `--ignore`) suppresses extra-key findings for matching names.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.

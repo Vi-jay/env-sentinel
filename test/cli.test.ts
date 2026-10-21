@@ -152,6 +152,38 @@ describe('cli', () => {
     assert.equal(readme.includes(json.stdout.trim()), true);
   });
 
+  it('applies package.json settings, then the config file, then flags', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env.example'), 'APP_URL=https://example.com\n');
+    writeFileSync(join(dir, '.env'), 'APP_URL=https://example.com\nDEBUG=1\nAPI_TOKEN=local\nFEATURE=1\n');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        'env-sentinel': { strict: true, ignore: ['DEBUG', '*_TOKEN'] },
+      }),
+    );
+
+    const fromPackage = run(['check'], dir);
+    assert.equal(fromPackage.status, 1);
+    assert.match(fromPackage.stdout, /FEATURE/);
+    assert.equal(fromPackage.stdout.includes('DEBUG'), false);
+    assert.equal(fromPackage.stdout.includes('API_TOKEN'), false);
+
+    writeFileSync(join(dir, 'env-sentinel.config.json'), '{"strict":false}\n');
+    const fromFile = run(['check'], dir);
+    assert.equal(fromFile.status, 0);
+    assert.match(fromFile.stdout, /FEATURE/);
+    assert.equal(fromFile.stdout.includes('DEBUG'), false);
+
+    const forced = run(['check', '--strict'], dir);
+    assert.equal(forced.status, 1);
+
+    const bare = run(['check', '--no-config'], dir);
+    assert.equal(bare.status, 0);
+    assert.match(bare.stdout, /DEBUG/);
+    assert.match(bare.stdout, /API_TOKEN/);
+  });
+
   it('rejects an unknown command', () => {
     const result = run(['lint'], root);
     assert.equal(result.status, 2);

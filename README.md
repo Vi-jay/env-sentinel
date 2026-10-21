@@ -192,6 +192,7 @@ env-sentinel init [options]
 | `-x, --example <path>` | all | Example file. Default: `.env.example` |
 | `--schema <path>` | check | JSON schema, or another dotenv file |
 | `--strict` / `--no-strict` | check | Undocumented keys are errors, or warnings |
+| `--ignore <glob>` | check | Skip extra-key findings whose names match. Repeat the flag, or separate patterns with commas. `*` matches any characters and `?` matches one. Replaces the configured list |
 | `-f, --format <human\|json>` | check | Default: `human` |
 | `--quiet` | check | Print nothing when the human report has no errors |
 | `--prune` | sync | Remove example keys that are not in the env file, including the comments attached to them |
@@ -202,7 +203,7 @@ env-sentinel init [options]
 | `-h, --help` | | Help |
 | `-v, --version` | | Version |
 
-Flags override the config file. Paths in a config file are relative to that file. Paths on the command line are relative to the working directory.
+Command-line flags override `env-sentinel.config.json`, which overrides the `env-sentinel` key in `package.json`. `--no-config` skips both. Paths in a config file are relative to that file. Paths in `package.json` and on the command line are relative to the working directory. `package.json` is read from the working directory only.
 
 ### Config file
 
@@ -212,11 +213,14 @@ Flags override the config file. Paths in a config file are relative to that file
   "example": ".env.example",
   "schema": "env.schema.json",
   "strict": false,
-  "format": "human"
+  "format": "human",
+  "ignore": ["DEBUG", "*_TOKEN"]
 }
 ```
 
-`env` may be a string or an array. Unknown fields are an error.
+The same object may live under the `env-sentinel` key in `package.json`. A field set in `env-sentinel.config.json` wins over the same field in `package.json`. An omitted field falls through.
+
+`env` may be a string or an array. `ignore` is an array of key names or globs. It suppresses undocumented-key findings only. A required key that matches a pattern is still reported when it is missing, empty, or the wrong type. Unknown fields are an error.
 
 ### Exit codes
 
@@ -291,7 +295,7 @@ const written = sync({
 });
 ```
 
-Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
+Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `loadConfig`, `loadPackageConfig`, `ignoreMatch`, `maskSecret`, and the result types.
 
 ## Pre-commit
 

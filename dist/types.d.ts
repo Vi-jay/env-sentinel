@@ -109,6 +109,11 @@ export interface CheckOptions {
     examplePath?: string;
     schemaPath?: string;
     strict?: boolean;
+    /**
+     * Extra keys matching any of these names or globs are not reported.
+     * `*` matches any characters. `?` matches one. Schema keys are still checked.
+     */
+    ignore?: string[];
 }
 export interface CheckContentsInput {
     schema: Schema;
@@ -117,6 +122,7 @@ export interface CheckContentsInput {
         contents: string;
     };
     strict?: boolean;
+    ignore?: string[];
 }
 export type SyncCommand = 'sync' | 'init';
 export interface SyncMessage {
@@ -153,5 +159,7 @@ export interface FileConfig {
     schema?: string;
     strict?: boolean;
     format?: 'human' | 'json';
+    /** Extra-key globs. `*` matches any characters and `?` matches one. */
+    ignore?: string[];
 }
 //# sourceMappingURL=types.d.ts.map
