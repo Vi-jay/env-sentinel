@@ -28,6 +28,10 @@ describe('parseArgs', () => {
     assert.equal(strict.ok, false);
     const unknown = parseArgs(['lint']);
     assert.equal(unknown.ok, false);
+    const fix = parseArgs(['check', '--fix']);
+    assert.equal(fix.ok, false);
+    const interactive = parseArgs(['init', '--interactive']);
+    assert.equal(interactive.ok, false);
   });
 
   it('accepts sync options', () => {
@@ -37,5 +41,10 @@ describe('parseArgs', () => {
     assert.equal(parsed.args.prune, true);
     assert.equal(parsed.args.dryRun, true);
     assert.equal(parsed.args.example, '.env.example');
+    const fixing = parseArgs(['sync', '--interactive']);
+    assert.equal(fixing.ok, true);
+    if (!fixing.ok) return;
+    assert.equal(fixing.args.fix, true);
+    assert.equal(fixing.args.interactive, true);
   });
 });

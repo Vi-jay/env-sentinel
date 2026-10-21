@@ -6,11 +6,12 @@ export { formatReport } from './format.js';
 export { maskSecret } from './mask.js';
 export { parseEnv } from './parse.js';
 export { loadSchemaFromContents, mergeSchemas } from './schema.js';
-export { renderExample, sync } from './sync.js';
+export { fillMissingKeys, renderExample, sync } from './sync.js';
 export { containsInterpolation, typeProblem } from './validate.js';
 
 export type {
   CheckContentsInput,
+  EnvFill,
   CheckOptions,
   CheckReport,
   FileConfig,

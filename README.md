@@ -195,6 +195,8 @@ env-sentinel init [options]
 | `-f, --format <human\|json>` | check | Default: `human` |
 | `--quiet` | check | Print nothing when the human report has no errors |
 | `--prune` | sync | Remove example keys that are not in the env file, including the comments attached to them |
+| `--fix` | sync | Append example keys that are missing from the first env file. Existing values, including empty ones, are left unchanged |
+| `--interactive` | sync | Ask before each key `--fix` would add. Requires a terminal, and exits 2 otherwise |
 | `--dry-run` | sync, init | Print the example on stdout. Do not write |
 | `--config <path>` | all | Config file. Default: `env-sentinel.config.json` in the working directory |
 | `--no-config` | all | Ignore the config file |
@@ -265,7 +267,8 @@ Both commands read one or more env files and write the example file with LF line
 - `init` fails if the example file already exists.
 - `sync` creates the file when it is missing. When it exists, existing lines are left alone, including placeholder values, and new keys are appended under `# --- synced from .env (values omitted) ---`.
 - `--prune` deletes example keys that are absent from the env files.
-- The write is atomic: a temp file in the same directory is renamed into place.
+- `--fix` appends keys that are in the example and missing from the first env file. The appended text is that key's block from the example, including its placeholder and attached comments. Keys already present in the env file are not rewritten. Later `--env` files are not modified. Declined keys are left out when `--interactive` is set. Without a terminal, `--interactive` exits 2.
+- The write is atomic: a temp file in the same directory is renamed into place. The example and the env file are separate writes.
 - If a generated comment contains an env value of 8 or more characters, the write is refused and nothing is written. All-digit values are ignored, as are these exact placeholders: `true`, `false`, `yes`, `no`, `development`, `production`, `test`, `staging`, `localhost`, `changeme`, `placeholder`, `example`, `postgres`, `mysql`, `redis`, `mongodb`, `password`, `secret`. Shorter values repeated in a comment are not detected. Do not put secrets in comments.
 
 `parseEnv` returns real values. Do not log a parse result. Use `maskSecret` or the check report.
@@ -291,7 +294,7 @@ const written = sync({
 });
 ```
 
-Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
+Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `fillMissingKeys`, `maskSecret`, and the result types.
 
 ## Pre-commit
 

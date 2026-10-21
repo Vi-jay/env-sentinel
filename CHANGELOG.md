@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `sync --fix` appends example keys that are missing from the first env file, using the example placeholder lines. Existing values are not overwritten. `--interactive` asks before each added key and requires a terminal.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.
