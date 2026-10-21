@@ -125,7 +125,7 @@ interface Settings {
   examplePath?: string;
   schemaPath?: string;
   strict: boolean;
-  format: 'human' | 'json';
+  format: 'human' | 'json' | 'github';
   discover: string[];
   ignore: string[];
 }

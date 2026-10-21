@@ -23,9 +23,9 @@ inputs:
     required: false
     default: 'false'
   format:
-    description: Output format, human or json.
+    description: Output format. github prints the human report and Actions annotations. json and human are also accepted.
     required: false
-    default: human
+    default: github
   working-directory:
     description: Directory to run in.
     required: false
@@ -49,8 +49,8 @@ runs:
         INPUT_FORMAT: ${{ inputs.format }}
       run: |
         set -euo pipefail
-        if [[ "$INPUT_FORMAT" != "human" && "$INPUT_FORMAT" != "json" ]]; then
-          echo "env-sentinel: format must be human or json" >&2
+        if [[ "$INPUT_FORMAT" != "human" && "$INPUT_FORMAT" != "json" && "$INPUT_FORMAT" != "github" ]]; then
+          echo "env-sentinel: format must be human, json, or github" >&2
           exit 2
         fi
         cmd=(node "$GITHUB_ACTION_PATH/dist/cli.js" check --format "$INPUT_FORMAT" --no-color)

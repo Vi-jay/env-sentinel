@@ -152,6 +152,30 @@ describe('cli', () => {
     assert.equal(readme.includes(json.stdout.trim()), true);
   });
 
+  it('prints github annotations for the broken example without the secret', () => {
+    const result = run(
+      [
+        'check',
+        '--env',
+        'examples/broken/.env',
+        '--example',
+        'examples/broken/.env.example',
+        '--format',
+        'github',
+        '--no-color',
+      ],
+      root,
+    );
+    assert.equal(result.status, 1);
+    const commands = result.stdout.split('\n').filter((line) => line.startsWith('::'));
+    assert.ok(commands.some((line) => line.startsWith('::error ') && line.includes('title=missing') && !line.includes(',line=')));
+    assert.ok(commands.some((line) => line.startsWith('::error ') && line.includes('file=examples/broken/.env,line=')));
+    assert.ok(commands.some((line) => line.startsWith('::warning ') && line.includes('title=extra')));
+    assert.match(result.stdout, /6 errors, 1 warning/);
+    assert.equal(result.stdout.includes(SECRET), false);
+    assert.equal(result.stderr.includes(SECRET), false);
+  });
+
   it('checks each discovered env pair and hides values', () => {
     const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
     mkdirSync(join(dir, 'packages', 'web'), { recursive: true });

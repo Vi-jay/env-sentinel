@@ -10,7 +10,7 @@ export interface Args {
   schemaSet: boolean;
   strict: boolean;
   strictSet: boolean;
-  format?: 'human' | 'json';
+  format?: 'human' | 'json' | 'github';
   discover: string[];
   discoverSet: boolean;
   ignore: string[];
@@ -173,8 +173,8 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
       case '--format': {
         const value = takeValue(argv, index, inline, flag);
         if (!value.ok) return value;
-        if (value.value !== 'human' && value.value !== 'json') {
-          return { ok: false, message: '--format must be human or json' };
+        if (value.value !== 'human' && value.value !== 'json' && value.value !== 'github') {
+          return { ok: false, message: '--format must be human, json, or github' };
         }
         args.format = value.value;
         index = value.next - 1;
@@ -221,7 +221,7 @@ Options:
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
       --ignore <glob>    Do not report extra keys that match. Repeatable (check)
-  -f, --format <name>    human (default) or json (check)
+  -f, --format <name>    human (default), json, or github (check)
       --prune            Drop example keys that are not in the env file (sync)
       --fix              Append missing example keys to the first env file (sync)
       --interactive      Prompt before each key added by --fix (sync, terminal only)

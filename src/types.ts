@@ -210,7 +210,7 @@ export interface FileConfig {
   example?: string;
   schema?: string;
   strict?: boolean;
-  format?: 'human' | 'json';
+  format?: 'human' | 'json' | 'github';
   /** Globs, relative to the working directory, whose directories are searched for env pairs. */
   discover?: string[];
   /** Extra-key globs. `*` matches any characters and `?` matches one. */

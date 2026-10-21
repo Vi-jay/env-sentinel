@@ -86,8 +86,8 @@ function parseConfigObject(
     config.strict = record.strict;
   }
   if (record.format !== undefined) {
-    if (record.format !== 'human' && record.format !== 'json') {
-      return { ok: false, message: `${label} "format" must be "human" or "json"` };
+    if (record.format !== 'human' && record.format !== 'json' && record.format !== 'github') {
+      return { ok: false, message: `${label} "format" must be "human", "json", or "github"` };
     }
     config.format = record.format;
   }

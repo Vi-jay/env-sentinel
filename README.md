@@ -196,7 +196,7 @@ env-sentinel init [options]
 | `--discover <glob>` | check | Check each `.env` / `.env.example` pair under matching directories. Repeat the flag, or separate globs with commas. Replaces the configured list |
 | `--strict` / `--no-strict` | check | Undocumented keys are errors, or warnings |
 | `--ignore <glob>` | check | Skip extra-key findings whose names match. Repeat the flag, or separate patterns with commas. `*` matches any characters and `?` matches one. Replaces the configured list |
-| `-f, --format <human\|json>` | check | Default: `human` |
+| `-f, --format <human\|json\|github>` | check | Default: `human`. `github` adds Actions annotations before the human report |
 | `--quiet` | check | Print nothing when the human report has no errors |
 | `--prune` | sync | Remove example keys that are not in the env file, including the comments attached to them |
 | `--fix` | sync | Append example keys that are missing from the first env file. Existing values, including empty ones, are left unchanged |
@@ -351,10 +351,12 @@ Add `--strict` by overriding `args`:
 | `example-file` | `.env.example` | Set to an empty string to use `schema-file` alone |
 | `schema-file` | empty | JSON schema or another dotenv file |
 | `strict` | `false` | `true` fails on undocumented keys |
-| `format` | `human` | `human` or `json` |
+| `format` | `github` | `github`, `human`, or `json`. `github` prints the human report and a workflow command for each finding |
 | `working-directory` | `.` | Where the files live |
 
 Create the env file in an earlier step if it comes from CI secrets. The action does not print those values.
+
+`github` output writes one `::error` or `::warning` command per finding before the human report. `file` and `line` come from the finding. A missing key has no line in the env file, so that command omits `line`. `:` and `,` in the command are percent-encoded. The raw value is not part of the command.
 
 ## Parsing
 

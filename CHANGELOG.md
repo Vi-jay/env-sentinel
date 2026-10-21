@@ -7,6 +7,7 @@
 - Settings can come from the `env-sentinel` key in `package.json`. `env-sentinel.config.json` overrides it field by field, and flags override both. `ignore` (or `--ignore`) suppresses extra-key findings for matching names.
 - `--discover` finds `.env` / `.env.example` pairs (including `.env.<name>` / `.env.<name>.example`) under globbed directories and checks each pair on its own. `**` walks nested directories. `node_modules` and `.git` are skipped.
 - Parser coverage now includes Unicode values, lone CR, tabbed inline comments, quoted CRLF values, and a seeded property test that example rendering does not echo generated values.
+- `--format github` prints GitHub Actions annotations for each finding, using the finding's file and line, then the human report. The composite action defaults to that format. Values stay masked.
 
 ## 0.1.0 - 2026-10-21
 
