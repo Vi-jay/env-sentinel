@@ -7,5 +7,6 @@ export { maskSecret } from './mask.js';
 export { parseEnv } from './parse.js';
 export { loadSchemaFromContents, mergeSchemas } from './schema.js';
 export { renderExample, sync } from './sync.js';
+export { expandValue } from './expand.js';
 export { containsInterpolation, typeProblem } from './validate.js';
 //# sourceMappingURL=index.js.map

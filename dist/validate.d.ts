@@ -1,5 +1,8 @@
 import type { TypeSpec } from './types.js';
-/** True when the value is only a `$NAME` or `${NAME}` reference, or contains one. */
+/**
+ * True when the value contains `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME-default}`.
+ * An unclosed `${` is not a reference.
+ */
 export declare function containsInterpolation(value: string): boolean;
 /**
  * Return a problem description when `value` does not match `type`.

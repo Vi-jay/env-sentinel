@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `check` expands `$NAME`, `${NAME}`, `${NAME:-default}`, and `${NAME-default}` within a single env file. Undefined names and circular references are errors. Resolved values are type-checked and stay masked.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.

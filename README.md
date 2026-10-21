@@ -108,6 +108,8 @@ PORT=
 | `missing` | A required key is absent | error |
 | `empty` | A required value is empty or whitespace | error |
 | `type-mismatch` | The value does not match `@type` | error |
+| `undefined-var` | The value references a name that is not set in the same file | error |
+| `circular-ref` | Expansion refers to itself, or the chain is deeper than 32 | error |
 | `duplicate` | The same key is assigned again. The last value wins | error |
 | `malformed` | The line is not `KEY=VALUE`, or junk follows a quoted value | error |
 | `unclosed-quote` | A quoted value never closes | error |
@@ -119,7 +121,7 @@ PORT=
 
 Keys are required unless marked optional. Each `--env` file is checked on its own against the same contract. `.env.production` should be a complete file. A partial overlay such as `.env.local` reports every required key it does not repeat.
 
-A value that contains `$NAME` or `${NAME}` is not type-checked. The variable is not expanded. An empty required value is still an error.
+A value may reference other keys in the same file with `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME-default}`. `:-` uses the default when the name is unset or empty. `-` uses the default only when the name is unset. Names are resolved only inside that file, not across other `--env` files. A reference to a missing name is `undefined-var`. A cycle, or a chain deeper than 32, is `circular-ref`. When every reference resolves, `@type` is checked against the expanded value, and the report still masks it. The expansion is not written back to the file. An unclosed `${` is literal text and is not expanded. An empty required value is still an error before expansion. Nested defaults such as `${HOST:-${FALLBACK}}` are expanded.
 
 ## Annotations
 
@@ -291,7 +293,7 @@ const written = sync({
 });
 ```
 
-Also exported: `checkContents`, `parseEnv`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
+Also exported: `checkContents`, `parseEnv`, `expandValue`, `loadSchemaFromContents`, `mergeSchemas`, `renderExample`, `maskSecret`, and the result types.
 
 ## Pre-commit
 
