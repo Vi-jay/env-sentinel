@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -152,9 +152,82 @@ describe('cli', () => {
     assert.equal(readme.includes(json.stdout.trim()), true);
   });
 
+  it('checks each discovered env pair and hides values', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    mkdirSync(join(dir, 'packages', 'web'), { recursive: true });
+    mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+    writeFileSync(join(dir, 'packages', 'web', '.env.example'), 'APP_URL=https://example.com\n');
+    writeFileSync(join(dir, 'packages', 'web', '.env'), `APP_URL=https://example.com\nTOKEN=${SECRET}\n`);
+    writeFileSync(join(dir, 'packages', 'api', '.env.example'), 'PORT=3000\n');
+    writeFileSync(join(dir, 'packages', 'api', '.env'), 'PORT=\n');
+    const result = run(['check', '--discover', 'packages/*', '--no-color'], dir);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /packages\/web\/\.env/);
+    assert.match(result.stdout, /packages\/api\/\.env/);
+    assert.match(result.stdout, /empty/);
+    assert.match(result.stdout, /extra/);
+    assert.equal(result.stdout.includes(SECRET), false);
+    assert.equal(result.stderr.includes(SECRET), false);
+
+    const none = run(['check', '--discover', 'missing/*'], dir);
+    assert.equal(none.status, 2);
+    assert.match(none.stderr, /no \.env and \.env\.example pairs matched/);
+  });
+
+  it('applies package.json settings, then the config file, then flags', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env.example'), 'APP_URL=https://example.com\n');
+    writeFileSync(join(dir, '.env'), 'APP_URL=https://example.com\nDEBUG=1\nAPI_TOKEN=local\nFEATURE=1\n');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        'env-sentinel': { strict: true, ignore: ['DEBUG', '*_TOKEN'] },
+      }),
+    );
+
+    const fromPackage = run(['check'], dir);
+    assert.equal(fromPackage.status, 1);
+    assert.match(fromPackage.stdout, /FEATURE/);
+    assert.equal(fromPackage.stdout.includes('DEBUG'), false);
+    assert.equal(fromPackage.stdout.includes('API_TOKEN'), false);
+
+    writeFileSync(join(dir, 'env-sentinel.config.json'), '{"strict":false}\n');
+    const fromFile = run(['check'], dir);
+    assert.equal(fromFile.status, 0);
+    assert.match(fromFile.stdout, /FEATURE/);
+    assert.equal(fromFile.stdout.includes('DEBUG'), false);
+
+    const forced = run(['check', '--strict'], dir);
+    assert.equal(forced.status, 1);
+
+    const bare = run(['check', '--no-config'], dir);
+    assert.equal(bare.status, 0);
+    assert.match(bare.stdout, /DEBUG/);
+    assert.match(bare.stdout, /API_TOKEN/);
+  });
+
   it('rejects an unknown command', () => {
     const result = run(['lint'], root);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /Unknown command/);
+  });
+
+  it('fills missing env keys from the example and refuses a non-terminal prompt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env'), `TOKEN=${SECRET}\n`);
+    writeFileSync(join(dir, '.env.example'), 'TOKEN=\n# @type port\nPORT=3000\n');
+    const filled = run(['sync', '--fix', '--env', '.env', '--example', '.env.example'], dir);
+    assert.equal(filled.status, 0);
+    assert.match(filled.stdout, /Added to \.env: PORT/);
+    assert.equal(filled.stdout.includes(SECRET), false);
+    assert.equal(filled.stderr.includes(SECRET), false);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(env, new RegExp(`TOKEN=${SECRET}\\n`));
+    assert.match(env, /PORT=3000\n/);
+
+    const prompted = run(['sync', '--interactive', '--env', '.env', '--example', '.env.example'], dir);
+    assert.equal(prompted.status, 2);
+    assert.match(prompted.stderr, /needs a terminal/);
+    assert.equal(readFileSync(join(dir, '.env'), 'utf8'), env);
   });
 });

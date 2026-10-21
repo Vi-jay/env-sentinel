@@ -11,8 +11,14 @@ export interface Args {
   strict: boolean;
   strictSet: boolean;
   format?: 'human' | 'json';
+  discover: string[];
+  discoverSet: boolean;
+  ignore: string[];
+  ignoreSet: boolean;
   prune: boolean;
   dryRun: boolean;
+  fix: boolean;
+  interactive: boolean;
   config?: string;
   noConfig: boolean;
   /** Undefined means automatic. */
@@ -44,8 +50,14 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
     schemaSet: false,
     strict: false,
     strictSet: false,
+    discover: [],
+    discoverSet: false,
+    ignore: [],
+    ignoreSet: false,
     prune: false,
     dryRun: false,
+    fix: false,
+    interactive: false,
     noConfig: false,
     quiet: false,
     help: command === 'help',
@@ -88,6 +100,13 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
       case '--dry-run':
         args.dryRun = true;
         break;
+      case '--fix':
+        args.fix = true;
+        break;
+      case '--interactive':
+        args.interactive = true;
+        args.fix = true;
+        break;
       case '--quiet':
         args.quiet = true;
         break;
@@ -118,6 +137,26 @@ export function parseArgs(argv: string[]): { ok: true; args: Args } | { ok: fals
         if (value.value.length === 0) return { ok: false, message: `${flag} needs a file path` };
         args.example = value.value;
         args.exampleSet = true;
+        index = value.next - 1;
+        break;
+      }
+      case '--discover': {
+        const value = takeValue(argv, index, inline, flag);
+        if (!value.ok) return value;
+        const parts = splitList(value.value);
+        if (!parts) return { ok: false, message: '--discover needs a glob' };
+        args.discover.push(...parts);
+        args.discoverSet = true;
+        index = value.next - 1;
+        break;
+      }
+      case '--ignore': {
+        const value = takeValue(argv, index, inline, flag);
+        if (!value.ok) return value;
+        const parts = splitList(value.value);
+        if (!parts) return { ok: false, message: '--ignore needs a key or glob' };
+        args.ignore.push(...parts);
+        args.ignoreSet = true;
         index = value.next - 1;
         break;
       }
@@ -178,10 +217,14 @@ Options:
   -e, --env <path>       Env file. Repeatable, or comma-separated. Default: .env
   -x, --example <path>   Example file. Default: .env.example
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
+      --discover <glob>  Find .env and .env.example pairs. Repeatable (check)
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
+      --ignore <glob>    Do not report extra keys that match. Repeatable (check)
   -f, --format <name>    human (default) or json (check)
       --prune            Drop example keys that are not in the env file (sync)
+      --fix              Append missing example keys to the first env file (sync)
+      --interactive      Prompt before each key added by --fix (sync, terminal only)
       --dry-run          Print the example, do not write (sync, init)
       --quiet            Print nothing when check succeeds
       --config <path>    Config file. Default: env-sentinel.config.json
@@ -196,20 +239,28 @@ Exit codes:
   1  Validation errors
   2  Usage error, unreadable file, or sync refused to write
 
-Values are masked in every report. sync and init never copy assignment values.
+Values are masked in every report. sync and init never copy env values into the example.
+sync --fix copies example lines into the first env file only for keys that are not already there.
 `;
 
 function validateForCommand(args: Args): { ok: true; args: Args } | { ok: false; message: string } {
   if (args.command === 'check') {
     if (args.prune) return { ok: false, message: '--prune is only valid with sync' };
     if (args.dryRun) return { ok: false, message: '--dry-run is only valid with sync or init' };
+    if (args.fix) return { ok: false, message: '--fix is only valid with sync' };
+    if (args.interactive) return { ok: false, message: '--interactive is only valid with sync' };
     return { ok: true, args };
   }
   if (args.format) return { ok: false, message: '--format is only valid with check' };
   if (args.strictSet) return { ok: false, message: '--strict is only valid with check' };
   if (args.quiet) return { ok: false, message: '--quiet is only valid with check' };
   if (args.schemaSet) return { ok: false, message: '--schema is only valid with check' };
+  if (args.discoverSet) return { ok: false, message: '--discover is only valid with check' };
+  if (args.ignoreSet) return { ok: false, message: '--ignore is only valid with check' };
   if (args.command === 'init' && args.prune) return { ok: false, message: '--prune is only valid with sync' };
+  if (args.command === 'init' && (args.fix || args.interactive)) {
+    return { ok: false, message: '--fix and --interactive are only valid with sync' };
+  }
   return { ok: true, args };
 }
 

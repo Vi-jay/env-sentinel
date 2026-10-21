@@ -21,6 +21,8 @@ NODE_ENV=development
 ALERT_EMAIL=
 # @type int
 WORKERS=2
+# @optional
+HOST=
 `);
 
   it('reports missing, empty, type, duplicate, malformed, and extra keys without the secret', () => {
@@ -63,7 +65,19 @@ THIS IS BAD ${SECRET}
     assert.equal(report.ok, false);
   });
 
-  it('accepts a complete file and skips interpolated values', () => {
+  it('accepts a complete file and type-checks expanded values', () => {
+    const report = checkContents({
+      schema,
+      env: {
+        path: '.env',
+        contents: 'HOST=https://example.com\nAPP_URL=${HOST}/app\nPORT=3000\nNODE_ENV=development\nWORKERS=4\n',
+      },
+    });
+    assert.equal(report.ok, true);
+    assert.equal(report.findings.length, 0);
+  });
+
+  it('flags an undefined reference and does not type-check the template', () => {
     const report = checkContents({
       schema,
       env: {
@@ -71,8 +85,56 @@ THIS IS BAD ${SECRET}
         contents: 'APP_URL=${HOST}/app\nPORT=3000\nNODE_ENV=development\nWORKERS=4\n',
       },
     });
-    assert.equal(report.ok, true);
-    assert.equal(report.findings.length, 0);
+    assert.equal(report.ok, false);
+    const finding = report.findings.find((item) => item.code === 'undefined-var');
+    assert.equal(finding?.key, 'APP_URL');
+    assert.equal(finding?.message, 'References undefined variable HOST');
+    assert.equal(report.findings.some((item) => item.code === 'type-mismatch'), false);
+  });
+
+  it('uses a default when the referenced name is missing and masks a bad expansion', () => {
+    const fallback = checkContents({
+      schema,
+      env: {
+        path: '.env',
+        contents: 'APP_URL=${HOST:-https://example.com}/app\nPORT=${PORT_FILE:-3000}\nNODE_ENV=development\nWORKERS=4\n',
+      },
+    });
+    assert.equal(fallback.ok, true);
+
+    const report = checkContents({
+      schema,
+      env: {
+        path: '.env',
+        contents: `HOST=${SECRET}\nAPP_URL=\${HOST}/app\nPORT=3000\nNODE_ENV=development\nWORKERS=4\n`,
+      },
+    });
+    assert.equal(report.ok, false);
+    const mismatch = report.findings.find((item) => item.code === 'type-mismatch');
+    assert.equal(mismatch?.key, 'APP_URL');
+    assert.equal(mismatch?.maskedValue, '****');
+    assert.equal(JSON.stringify(report).includes(SECRET), false);
+  });
+
+  it('flags a cycle and an undefined reference on an undocumented key', () => {
+    const cycle = checkContents({
+      schema,
+      env: {
+        path: '.env',
+        contents: 'APP_URL=${ALT}\nALT=${APP_URL}\nPORT=3000\nNODE_ENV=development\nWORKERS=4\n',
+      },
+    });
+    assert.equal(cycle.findings.some((item) => item.code === 'circular-ref' && item.key === 'APP_URL'), true);
+
+    const extra = checkContents({
+      schema,
+      env: {
+        path: '.env',
+        contents: 'APP_URL=https://example.com\nPORT=3000\nNODE_ENV=development\nWORKERS=4\nDEBUG=${MISSING}\n',
+      },
+    });
+    assert.equal(extra.findings.some((item) => item.code === 'extra' && item.key === 'DEBUG'), true);
+    assert.equal(extra.findings.some((item) => item.code === 'undefined-var' && item.key === 'DEBUG'), true);
   });
 
   it('allows a missing optional key and an empty optional value', () => {
