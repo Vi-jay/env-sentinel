@@ -18,6 +18,8 @@ export function parseArgs(argv) {
         schemaSet: false,
         strict: false,
         strictSet: false,
+        ignore: [],
+        ignoreSet: false,
         prune: false,
         dryRun: false,
         fix: false,
@@ -106,6 +108,18 @@ export function parseArgs(argv) {
                 index = value.next - 1;
                 break;
             }
+            case '--ignore': {
+                const value = takeValue(argv, index, inline, flag);
+                if (!value.ok)
+                    return value;
+                const parts = splitList(value.value);
+                if (!parts)
+                    return { ok: false, message: '--ignore needs a key or glob' };
+                args.ignore.push(...parts);
+                args.ignoreSet = true;
+                index = value.next - 1;
+                break;
+            }
             case '--schema': {
                 const value = takeValue(argv, index, inline, flag);
                 if (!value.ok)
@@ -169,6 +183,7 @@ Options:
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
+      --ignore <glob>    Do not report extra keys that match. Repeatable (check)
   -f, --format <name>    human (default) or json (check)
       --prune            Drop example keys that are not in the env file (sync)
       --fix              Append missing example keys to the first env file (sync)
@@ -210,6 +225,8 @@ function validateForCommand(args) {
         return { ok: false, message: '--quiet is only valid with check' };
     if (args.schemaSet)
         return { ok: false, message: '--schema is only valid with check' };
+    if (args.ignoreSet)
+        return { ok: false, message: '--ignore is only valid with check' };
     if (args.command === 'init' && args.prune)
         return { ok: false, message: '--prune is only valid with sync' };
     if (args.command === 'init' && (args.fix || args.interactive)) {

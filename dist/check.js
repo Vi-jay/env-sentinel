@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
+import { ignoreMatch } from './config.js';
 import { expandValue } from './expand.js';
 import { maskSecret, valueLength } from './mask.js';
 import { parseEnv } from './parse.js';
@@ -64,6 +65,7 @@ export function check(options) {
             schema: loaded.schema,
             env: { path: envPath, contents: read.contents },
             strict,
+            ...(options.ignore && options.ignore.length > 0 ? { ignore: options.ignore } : {}),
         }));
     }
     return finish(files, strict);
@@ -141,10 +143,13 @@ export function checkContents(input) {
             valueLength: valueLength(inspected.expanded),
         });
     }
+    const ignore = input.ignore ?? [];
     for (const entry of parsed.entries) {
         if (schemaNames.has(entry.key))
             continue;
         if (parsed.variables.get(entry.key) !== entry)
+            continue;
+        if (ignoreMatch(entry.key, ignore))
             continue;
         findings.push({
             severity: strict ? 'error' : 'warning',

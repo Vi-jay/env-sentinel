@@ -12,6 +12,10 @@ describe('parseArgs', () => {
     assert.deepEqual(parsed.args.env, ['.env', '.env.local']);
     assert.equal(parsed.args.strict, true);
     assert.equal(parsed.args.format, 'json');
+    const ignored = parseArgs(['check', '--ignore', 'DEBUG,*_TOKEN', '--ignore', 'A?C']);
+    assert.equal(ignored.ok, true);
+    if (!ignored.ok) return;
+    assert.deepEqual(ignored.args.ignore, ['DEBUG', '*_TOKEN', 'A?C']);
   });
 
   it('splits comma-separated env paths', () => {
@@ -32,6 +36,8 @@ describe('parseArgs', () => {
     assert.equal(fix.ok, false);
     const interactive = parseArgs(['init', '--interactive']);
     assert.equal(interactive.ok, false);
+    const ignored = parseArgs(['sync', '--ignore', 'DEBUG']);
+    assert.equal(ignored.ok, false);
   });
 
   it('accepts sync options', () => {

@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { HELP, parseArgs } from './args.js';
 import { check } from './check.js';
-import { loadConfig } from './config.js';
+import { loadConfig, loadPackageConfig } from './config.js';
 import { formatReport } from './format.js';
 import { sync } from './sync.js';
 const IO_CODES = new Set(['file-not-found', 'unreadable']);
@@ -37,6 +37,7 @@ export function main(argv, cwd = process.cwd()) {
             ...(settings.examplePath ? { examplePath: settings.examplePath } : {}),
             ...(settings.schemaPath ? { schemaPath: settings.schemaPath } : {}),
             strict: settings.strict,
+            ignore: settings.ignore,
         });
         const color = settings.format === 'json' ? false : useColor(args.color);
         const text = formatReport(report, { format: settings.format, color, version: readVersion() });
@@ -102,29 +103,41 @@ function resolveSettings(args, cwd) {
         config = loaded.config;
         configDir = dirname(configPath);
     }
-    const envSource = args.envSet ? args.env : (config.env ?? ['.env']);
+    let packaged = {};
+    if (!args.noConfig) {
+        const loadedPackage = loadPackageConfig(cwd);
+        if (!loadedPackage.ok)
+            return loadedPackage;
+        packaged = loadedPackage.config ?? {};
+    }
+    const envSource = args.envSet ? args.env : (config.env ?? packaged.env ?? ['.env']);
     const envBase = args.envSet ? cwd : config.env ? configDir : cwd;
     const envPaths = envSource.map((file) => locate(file, envBase, cwd));
-    const exampleSet = args.exampleSet || config.example !== undefined;
-    const schemaSet = args.schemaSet || config.schema !== undefined;
+    const exampleSet = args.exampleSet || config.example !== undefined || packaged.example !== undefined;
+    const schemaSet = args.schemaSet || config.schema !== undefined || packaged.schema !== undefined;
     let examplePath;
     let schemaPath;
     if (args.exampleSet && args.example)
         examplePath = locate(args.example, cwd, cwd);
     else if (config.example)
         examplePath = locate(config.example, configDir, cwd);
+    else if (packaged.example)
+        examplePath = packaged.example;
     if (args.schemaSet && args.schema)
         schemaPath = locate(args.schema, cwd, cwd);
     else if (config.schema)
         schemaPath = locate(config.schema, configDir, cwd);
+    else if (packaged.schema)
+        schemaPath = packaged.schema;
     if (args.command === 'check' && !exampleSet && !schemaSet)
         examplePath = '.env.example';
     if (args.command !== 'check' && !examplePath)
         examplePath = '.env.example';
     const settings = {
         envPaths,
-        strict: args.strictSet ? args.strict : (config.strict ?? false),
-        format: args.format ?? config.format ?? 'human',
+        strict: args.strictSet ? args.strict : (config.strict ?? packaged.strict ?? false),
+        format: args.format ?? config.format ?? packaged.format ?? 'human',
+        ignore: args.ignoreSet ? args.ignore : (config.ignore ?? packaged.ignore ?? []),
     };
     if (examplePath)
         settings.examplePath = examplePath;
