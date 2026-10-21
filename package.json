@@ -1,0 +1,66 @@
+{
+  "name": "@vi-jay/env-sentinel",
+  "version": "0.1.0",
+  "description": "Validate .env files against .env.example or a JSON schema without leaking values.",
+  "type": "module",
+  "bin": {
+    "env-sentinel": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "action.yml",
+    ".pre-commit-hooks.yaml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --enable-source-maps --test dist-test/test/*.test.js",
+    "lint": "eslint .",
+    "prepublishOnly": "npm run lint && npm test"
+  },
+  "keywords": [
+    "env",
+    "dotenv",
+    ".env",
+    "environment",
+    "validation",
+    "cli",
+    "ci",
+    "pre-commit"
+  ],
+  "author": "Vi-jay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vi-jay/env-sentinel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vi-jay/env-sentinel/issues"
+  },
+  "homepage": "https://github.com/Vi-jay/env-sentinel#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^22.19.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  }
+}

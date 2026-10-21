@@ -1,0 +1,6 @@
+{
+  "env": [".env"],
+  "schema": "env.schema.json",
+  "strict": true,
+  "format": "human"
+}

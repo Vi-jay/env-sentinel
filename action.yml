@@ -1,0 +1,76 @@
+name: env-sentinel
+description: Validate .env files against .env.example or a JSON schema. Values are masked.
+author: Vi-jay
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  env-file:
+    description: Env file or comma-separated list of env files.
+    required: false
+    default: .env
+  example-file:
+    description: Example file used as the contract. Leave empty when using schema-file alone.
+    required: false
+    default: .env.example
+  schema-file:
+    description: Optional JSON schema. When set together with example-file, schema fields override annotations.
+    required: false
+    default: ''
+  strict:
+    description: When true, undocumented keys fail the check.
+    required: false
+    default: 'false'
+  format:
+    description: Output format, human or json.
+    required: false
+    default: human
+  working-directory:
+    description: Directory to run in.
+    required: false
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: '22'
+    - name: Validate env files
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_ENV: ${{ inputs.env-file }}
+        INPUT_EXAMPLE: ${{ inputs.example-file }}
+        INPUT_SCHEMA: ${{ inputs.schema-file }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_FORMAT: ${{ inputs.format }}
+      run: |
+        set -euo pipefail
+        if [[ "$INPUT_FORMAT" != "human" && "$INPUT_FORMAT" != "json" ]]; then
+          echo "env-sentinel: format must be human or json" >&2
+          exit 2
+        fi
+        cmd=(node "$GITHUB_ACTION_PATH/dist/cli.js" check --format "$INPUT_FORMAT" --no-color)
+        if [[ -n "$INPUT_EXAMPLE" ]]; then
+          cmd+=(--example "$INPUT_EXAMPLE")
+        fi
+        if [[ -n "$INPUT_SCHEMA" ]]; then
+          cmd+=(--schema "$INPUT_SCHEMA")
+        fi
+        if [[ "$INPUT_STRICT" == "true" ]]; then
+          cmd+=(--strict)
+        fi
+        if [[ -n "$INPUT_ENV" ]]; then
+          IFS=',' read -ra files <<< "$INPUT_ENV"
+          for file in "${files[@]}"; do
+            trimmed="${file#"${file%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+            if [[ -n "$trimmed" ]]; then
+              cmd+=(--env "$trimmed")
+            fi
+          done
+        fi
+        "${cmd[@]}"

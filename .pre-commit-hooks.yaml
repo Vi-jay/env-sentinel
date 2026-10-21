@@ -1,0 +1,7 @@
+- id: env-sentinel
+  name: env-sentinel
+  description: Validate .env files against .env.example without printing secret values
+  entry: env-sentinel check
+  language: node
+  files: \.env
+  pass_filenames: false

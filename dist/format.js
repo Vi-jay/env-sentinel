@@ -1,0 +1,77 @@
+export function formatReport(report, options) {
+    if (options.format === 'json')
+        return `${JSON.stringify(jsonReport(report, options.version), null, 2)}\n`;
+    return formatHuman(report, options.color);
+}
+function jsonReport(report, version) {
+    return {
+        ...(version ? { version } : {}),
+        ok: report.ok,
+        strict: report.strict,
+        summary: report.summary,
+        files: report.files.map((file) => ({
+            path: file.path,
+            role: file.role,
+            ok: file.ok,
+            checked: file.checked,
+            findings: file.findings.map(jsonFinding),
+        })),
+    };
+}
+function jsonFinding(finding) {
+    const json = {
+        severity: finding.severity,
+        code: finding.code,
+        message: finding.message,
+        file: finding.file,
+    };
+    if (finding.line !== undefined)
+        json.line = finding.line;
+    if (finding.endLine !== undefined && finding.endLine !== finding.line)
+        json.endLine = finding.endLine;
+    if (finding.key !== undefined)
+        json.key = finding.key;
+    if (finding.maskedValue !== undefined)
+        json.maskedValue = finding.maskedValue;
+    if (finding.valueLength !== undefined)
+        json.valueLength = finding.valueLength;
+    return json;
+}
+function formatHuman(report, color) {
+    const lines = [paint('env-sentinel', color, 'bold'), ''];
+    for (const file of report.files) {
+        if (file.role === 'schema' && file.findings.length === 0)
+            continue;
+        lines.push(paint(file.path, color, 'bold'));
+        if (file.findings.length === 0) {
+            lines.push(`  ${paint('ok', color, 'green')}  ${String(file.checked)} keys checked`);
+            lines.push('');
+            continue;
+        }
+        for (const finding of file.findings) {
+            const label = finding.severity === 'error' ? 'error  ' : 'warning';
+            const severity = finding.severity === 'error' ? paint(label, color, 'red') : paint(label, color, 'yellow');
+            const code = finding.code.padEnd(14, ' ');
+            const subject = (finding.key ?? (finding.line !== undefined ? `line ${String(finding.line)}` : '')).padEnd(16, ' ');
+            lines.push(`  ${severity}  ${code} ${subject}  ${finding.message}`);
+        }
+        lines.push('');
+    }
+    const errorLabel = report.summary.errors === 1 ? 'error' : 'errors';
+    const warningLabel = report.summary.warnings === 1 ? 'warning' : 'warnings';
+    const summary = `${String(report.summary.errors)} ${errorLabel}, ${String(report.summary.warnings)} ${warningLabel}`;
+    lines.push(report.ok ? paint(summary, color, 'green') : paint(summary, color, 'red'));
+    return `${lines.join('\n')}\n`;
+}
+function paint(text, enabled, tone) {
+    if (!enabled)
+        return text;
+    const codes = {
+        red: '31',
+        yellow: '33',
+        green: '32',
+        bold: '1',
+    };
+    return `\u001b[${codes[tone]}m${text}\u001b[0m`;
+}
+//# sourceMappingURL=format.js.map

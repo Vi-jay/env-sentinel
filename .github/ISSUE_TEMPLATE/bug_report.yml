@@ -1,0 +1,33 @@
+name: Bug report
+description: A problem in parsing, checking, or syncing env files
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Use fake secrets only. Do not paste a real .env file.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal example
+      description: Include the command, the example file, and a redacted env file.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `env-sentinel --version`, or the git commit.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: v22.0.0
+    validations:
+      required: true

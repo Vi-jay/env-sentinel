@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Rebuild and confirm dist is current
+        run: |
+          npm run build
+          git diff --exit-code -- dist
+
+  action:
+    name: Action smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Valid env
+        uses: ./
+        with:
+          env-file: examples/app/.env
+          example-file: examples/app/.env.example
+      - name: Strict failure
+        id: strict
+        continue-on-error: true
+        uses: ./
+        with:
+          env-file: examples/app/.env.local
+          example-file: examples/app/.env.example
+          strict: true
+      - name: Strict check exits non-zero
+        if: steps.strict.outcome == 'success'
+        run: echo "strict check should have failed" && exit 1
