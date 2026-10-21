@@ -4,7 +4,7 @@
  * contents; use `maskSecret` and the finding types, which are already masked.
  */
 export type Severity = 'error' | 'warning';
-export type FindingCode = 'missing' | 'extra' | 'empty' | 'duplicate' | 'malformed' | 'unclosed-quote' | 'type-mismatch' | 'unknown-type' | 'schema-invalid' | 'file-not-found' | 'unreadable';
+export type FindingCode = 'missing' | 'extra' | 'empty' | 'duplicate' | 'malformed' | 'unclosed-quote' | 'type-mismatch' | 'undefined-var' | 'circular-ref' | 'unknown-type' | 'schema-invalid' | 'file-not-found' | 'unreadable';
 export type TypeName = 'string' | 'url' | 'int' | 'bool' | 'email' | 'port' | 'enum';
 export interface TypeSpec {
     name: TypeName;

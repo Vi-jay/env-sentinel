@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `check` expands `$NAME`, `${NAME}`, `${NAME:-default}`, and `${NAME-default}` within a single env file. Undefined names and circular references are errors. Resolved values are type-checked and stay masked.
 - `sync --fix` appends example keys that are missing from the first env file, using the example placeholder lines. Existing values are not overwritten. `--interactive` asks before each added key and requires a terminal.
 
 ## 0.1.0 - 2026-10-21
