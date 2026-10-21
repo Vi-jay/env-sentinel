@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Parser coverage now includes Unicode values, lone CR, tabbed inline comments, quoted CRLF values, and a seeded property test that example rendering does not echo generated values.
+
 ## 0.1.0 - 2026-10-21
 
 Initial release.
