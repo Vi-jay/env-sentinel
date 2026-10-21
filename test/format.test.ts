@@ -50,7 +50,7 @@ function report(): CheckReport {
 
 describe('github annotations', () => {
   it('emits workflow commands without a line for missing keys', () => {
-    const text = formatReport(report(), { format: 'github', color: false, version: '0.1.0' });
+    const text = formatReport(report(), { format: 'github', color: false, version: '0.2.0' });
     const lines = text.split('\n');
     assert.equal(lines[0], '::error file=a%2Cb.env,line=4,title=malformed::Line 4%3A expected KEY=VALUE');
     assert.equal(

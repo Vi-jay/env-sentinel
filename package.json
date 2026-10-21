@@ -1,6 +1,6 @@
 {
   "name": "@vi-jay/env-sentinel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Validate .env files against .env.example or a JSON schema without leaking values.",
   "type": "module",
   "bin": {

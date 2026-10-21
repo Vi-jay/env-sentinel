@@ -251,7 +251,7 @@ A passing check of `examples/app/.env` looks like this:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "ok": true,
   "strict": false,
   "summary": {
@@ -299,7 +299,7 @@ const report = check({
   strict: true,
 });
 
-process.stdout.write(formatReport(report, { format: 'human', color: false, version: '0.1.0' }));
+process.stdout.write(formatReport(report, { format: 'human', color: false, version: '0.2.0' }));
 if (!report.ok) process.exitCode = 1;
 
 const written = sync({
@@ -318,7 +318,7 @@ Also exported: `checkContents`, `combineReports`, `discoverEnvPairs`, `parseEnv`
 ```yaml
 repos:
   - repo: https://github.com/Vi-jay/env-sentinel
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: env-sentinel
 ```
@@ -338,7 +338,7 @@ Add `--strict` by overriding `args`:
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: Vi-jay/env-sentinel@v0.1.0
+- uses: Vi-jay/env-sentinel@v0.2.0
   with:
     env-file: .env
     example-file: .env.example
