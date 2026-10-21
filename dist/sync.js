@@ -2,6 +2,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { fileExists, readText, writeTextAtomic } from './fsutil.js';
 import { parseEnv } from './parse.js';
 const HEADER = '# --- synced from .env (values omitted) ---';
+const FILL_HEADER = '# --- added by env-sentinel sync --fix ---';
 const COMMON_VALUES = new Set([
     'true',
     'false',
@@ -75,7 +76,7 @@ export function sync(options) {
         const leaked = leakedKeys(merged.contents, merged.entries);
         if (leaked.length > 0)
             return refusal(examplePath, leaked, messages);
-        return writeResult({
+        return attachFill(writeResult({
             path: examplePath,
             absolute: exampleAbsolute,
             contents: merged.contents,
@@ -85,7 +86,7 @@ export function sync(options) {
             removed: [],
             messages,
             dryRun: options.dryRun ?? false,
-        });
+        }), options, cwd, primaryEnv(envParts));
     }
     const exampleRead = readText(exampleAbsolute);
     if (!exampleRead.ok) {
@@ -116,7 +117,7 @@ export function sync(options) {
             return refusal(examplePath, leaked, messages);
         contents = appendSection(pruned.contents, selected);
     }
-    return writeResult({
+    return attachFill(writeResult({
         path: examplePath,
         absolute: exampleAbsolute,
         contents: ensureTrailingNewline(contents),
@@ -126,7 +127,74 @@ export function sync(options) {
         removed: pruned.removed,
         messages,
         dryRun: options.dryRun ?? false,
-    });
+    }), options, cwd, primaryEnv(envParts));
+}
+/**
+ * Append example keys that are absent from `envContents`.
+ * Copies each example placeholder block. Does not change keys that already exist, including empty ones.
+ */
+export function fillMissingKeys(envContents, exampleContents, confirm) {
+    const example = parseEnv(exampleContents);
+    const present = new Set(parseEnv(envContents).entries.map((entry) => entry.key));
+    const added = [];
+    const declined = [];
+    const seen = new Set();
+    let blocks = '';
+    for (const entry of example.entries) {
+        if (!entry.wellFormed || seen.has(entry.key))
+            continue;
+        seen.add(entry.key);
+        if (present.has(entry.key))
+            continue;
+        if (confirm && !confirm(entry.key)) {
+            declined.push(entry.key);
+            continue;
+        }
+        let block = exampleContents.slice(entry.blockStart, entry.blockEnd);
+        if (block.length === 0)
+            continue;
+        if (!block.endsWith('\n'))
+            block += '\n';
+        blocks += block;
+        added.push(entry.key);
+    }
+    if (added.length === 0)
+        return { contents: envContents, added, declined };
+    const header = envContents.includes(FILL_HEADER) ? '' : `${FILL_HEADER}\n`;
+    const base = envContents.length === 0 ? '' : envContents.endsWith('\n') ? envContents : `${envContents}\n`;
+    const gap = base.length === 0 || header.length === 0 ? '' : '\n';
+    return { contents: `${base}${gap}${header}${blocks}`, added, declined };
+}
+function primaryEnv(parts) {
+    return parts[0] ?? null;
+}
+function attachFill(result, options, cwd, env) {
+    if (!options.fix || !env)
+        return result;
+    if (result.refused || result.messages.some((message) => message.severity === 'error'))
+        return result;
+    if (result.contents.length === 0)
+        return result;
+    const filled = fillMissingKeys(env.contents, result.contents, options.confirm);
+    const envFill = {
+        path: env.path,
+        added: filled.added,
+        declined: filled.declined,
+        changed: filled.contents !== env.contents,
+        wrote: false,
+    };
+    if (!envFill.changed || options.dryRun)
+        return { ...result, envFill };
+    const absolute = isAbsolute(env.path) ? env.path : resolve(cwd, env.path);
+    const written = writeTextAtomic(absolute, filled.contents);
+    if (!written.ok) {
+        return {
+            ...result,
+            envFill,
+            messages: [...result.messages, { severity: 'error', message: written.message }],
+        };
+    }
+    return { ...result, envFill: { ...envFill, wrote: true } };
 }
 function emptyResult(path, messages) {
     return {
