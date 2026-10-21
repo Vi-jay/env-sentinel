@@ -1,6 +1,8 @@
 export { parseAnnotations, parseTypeToken } from './annotations.js';
 export { parseArgs } from './args.js';
-export { check, checkContents } from './check.js';
+export { check, checkContents, combineReports } from './check.js';
+export { discoverEnvPairs } from './discover.js';
+export type { EnvPair } from './discover.js';
 export { ignoreMatch, loadConfig, loadPackageConfig } from './config.js';
 export { formatReport } from './format.js';
 export { maskSecret } from './mask.js';

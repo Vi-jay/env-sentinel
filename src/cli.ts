@@ -4,7 +4,8 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { HELP, parseArgs, type Args } from './args.js';
-import { check } from './check.js';
+import { check, combineReports } from './check.js';
+import { discoverEnvPairs } from './discover.js';
 import { loadConfig, loadPackageConfig } from './config.js';
 import { formatReport } from './format.js';
 import { sync } from './sync.js';
@@ -37,14 +38,43 @@ export function main(argv: string[], cwd = process.cwd()): number {
   const settings = configured.settings;
 
   if (args.command === 'check') {
-    const report = check({
-      cwd,
-      envPaths: settings.envPaths,
-      ...(settings.examplePath ? { examplePath: settings.examplePath } : {}),
-      ...(settings.schemaPath ? { schemaPath: settings.schemaPath } : {}),
-      strict: settings.strict,
-      ignore: settings.ignore,
-    });
+    const reports: CheckReport[] = [];
+    if (args.envSet || settings.discover.length === 0) {
+      reports.push(
+        check({
+          cwd,
+          envPaths: settings.envPaths,
+          ...(settings.examplePath ? { examplePath: settings.examplePath } : {}),
+          ...(settings.schemaPath ? { schemaPath: settings.schemaPath } : {}),
+          strict: settings.strict,
+          ignore: settings.ignore,
+        }),
+      );
+    }
+    if (settings.discover.length > 0) {
+      const found = discoverEnvPairs(cwd, settings.discover);
+      if (!found.ok) {
+        process.stderr.write(`env-sentinel: ${found.message}\n`);
+        return 2;
+      }
+      if (found.pairs.length === 0) {
+        process.stderr.write('env-sentinel: no .env and .env.example pairs matched\n');
+        return 2;
+      }
+      for (const pair of found.pairs) {
+        reports.push(
+          check({
+            cwd,
+            envPaths: [pair.envPath],
+            examplePath: pair.examplePath,
+            strict: settings.strict,
+            ignore: settings.ignore,
+          }),
+        );
+      }
+    }
+    const report = reports.length === 1 ? reports[0] : combineReports(reports, settings.strict);
+    if (!report) return 2;
     const color = settings.format === 'json' ? false : useColor(args.color);
     const text = formatReport(report, { format: settings.format, color, version: readVersion() });
     if (!(args.quiet && settings.format === 'human' && report.ok)) process.stdout.write(text);
@@ -96,6 +126,7 @@ interface Settings {
   schemaPath?: string;
   strict: boolean;
   format: 'human' | 'json';
+  discover: string[];
   ignore: string[];
 }
 
@@ -146,6 +177,7 @@ function resolveSettings(args: Args, cwd: string): { ok: true; settings: Setting
     envPaths,
     strict: args.strictSet ? args.strict : (config.strict ?? packaged.strict ?? false),
     format: args.format ?? config.format ?? packaged.format ?? 'human',
+    discover: args.discoverSet ? args.discover : (config.discover ?? packaged.discover ?? []),
     ignore: args.ignoreSet ? args.ignore : (config.ignore ?? packaged.ignore ?? []),
   };
   if (examplePath) settings.examplePath = examplePath;

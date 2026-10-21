@@ -227,6 +227,9 @@ function readSchema(displayPath, cwd, format) {
     }
     return { ok: true, schema: loadSchemaFromContents(read.contents, displayPath, format) };
 }
+export function combineReports(reports, strict) {
+    return finish(reports.flatMap((report) => report.files), strict);
+}
 function finish(files, strict) {
     let errors = 0;
     let warnings = 0;

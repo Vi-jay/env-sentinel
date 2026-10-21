@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -150,6 +150,28 @@ describe('cli', () => {
     );
     assert.equal(readme.includes(human.stdout.trim()), true);
     assert.equal(readme.includes(json.stdout.trim()), true);
+  });
+
+  it('checks each discovered env pair and hides values', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    mkdirSync(join(dir, 'packages', 'web'), { recursive: true });
+    mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+    writeFileSync(join(dir, 'packages', 'web', '.env.example'), 'APP_URL=https://example.com\n');
+    writeFileSync(join(dir, 'packages', 'web', '.env'), `APP_URL=https://example.com\nTOKEN=${SECRET}\n`);
+    writeFileSync(join(dir, 'packages', 'api', '.env.example'), 'PORT=3000\n');
+    writeFileSync(join(dir, 'packages', 'api', '.env'), 'PORT=\n');
+    const result = run(['check', '--discover', 'packages/*', '--no-color'], dir);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /packages\/web\/\.env/);
+    assert.match(result.stdout, /packages\/api\/\.env/);
+    assert.match(result.stdout, /empty/);
+    assert.match(result.stdout, /extra/);
+    assert.equal(result.stdout.includes(SECRET), false);
+    assert.equal(result.stderr.includes(SECRET), false);
+
+    const none = run(['check', '--discover', 'missing/*'], dir);
+    assert.equal(none.status, 2);
+    assert.match(none.stderr, /no \.env and \.env\.example pairs matched/);
   });
 
   it('applies package.json settings, then the config file, then flags', () => {

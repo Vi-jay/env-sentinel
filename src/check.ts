@@ -254,6 +254,13 @@ function readSchema(
   return { ok: true, schema: loadSchemaFromContents(read.contents, displayPath, format) };
 }
 
+export function combineReports(reports: CheckReport[], strict: boolean): CheckReport {
+  return finish(
+    reports.flatMap((report) => report.files),
+    strict,
+  );
+}
+
 function finish(files: FileReport[], strict: boolean): CheckReport {
   let errors = 0;
   let warnings = 0;

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { readText } from './fsutil.js';
 import type { FileConfig } from './types.js';
 
-const ALLOWED = new Set(['env', 'example', 'schema', 'strict', 'format', 'ignore']);
+const ALLOWED = new Set(['env', 'example', 'schema', 'strict', 'format', 'discover', 'ignore']);
 
 export function loadConfig(path: string): { ok: true; config: FileConfig } | { ok: false; message: string } {
   const read = readText(path);
@@ -90,6 +90,11 @@ function parseConfigObject(
       return { ok: false, message: `${label} "format" must be "human" or "json"` };
     }
     config.format = record.format;
+  }
+  if (record.discover !== undefined) {
+    const discover = normalizeEnv(record.discover);
+    if (!discover) return { ok: false, message: `${label} "discover" must be a string or an array of strings` };
+    config.discover = discover;
   }
   if (record.ignore !== undefined) {
     if (!Array.isArray(record.ignore) || record.ignore.some((item) => typeof item !== 'string' || item.length === 0)) {

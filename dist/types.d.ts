@@ -180,6 +180,8 @@ export interface FileConfig {
     schema?: string;
     strict?: boolean;
     format?: 'human' | 'json';
+    /** Globs, relative to the working directory, whose directories are searched for env pairs. */
+    discover?: string[];
     /** Extra-key globs. `*` matches any characters and `?` matches one. */
     ignore?: string[];
 }

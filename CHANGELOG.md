@@ -5,6 +5,7 @@
 - `check` expands `$NAME`, `${NAME}`, `${NAME:-default}`, and `${NAME-default}` within a single env file. Undefined names and circular references are errors. Resolved values are type-checked and stay masked.
 - `sync --fix` appends example keys that are missing from the first env file, using the example placeholder lines. Existing values are not overwritten. `--interactive` asks before each added key and requires a terminal.
 - Settings can come from the `env-sentinel` key in `package.json`. `env-sentinel.config.json` overrides it field by field, and flags override both. `ignore` (or `--ignore`) suppresses extra-key findings for matching names.
+- `--discover` finds `.env` / `.env.example` pairs (including `.env.<name>` / `.env.<name>.example`) under globbed directories and checks each pair on its own. `**` walks nested directories. `node_modules` and `.git` are skipped.
 
 ## 0.1.0 - 2026-10-21
 

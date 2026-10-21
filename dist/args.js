@@ -18,6 +18,8 @@ export function parseArgs(argv) {
         schemaSet: false,
         strict: false,
         strictSet: false,
+        discover: [],
+        discoverSet: false,
         ignore: [],
         ignoreSet: false,
         prune: false,
@@ -108,6 +110,18 @@ export function parseArgs(argv) {
                 index = value.next - 1;
                 break;
             }
+            case '--discover': {
+                const value = takeValue(argv, index, inline, flag);
+                if (!value.ok)
+                    return value;
+                const parts = splitList(value.value);
+                if (!parts)
+                    return { ok: false, message: '--discover needs a glob' };
+                args.discover.push(...parts);
+                args.discoverSet = true;
+                index = value.next - 1;
+                break;
+            }
             case '--ignore': {
                 const value = takeValue(argv, index, inline, flag);
                 if (!value.ok)
@@ -181,6 +195,7 @@ Options:
   -e, --env <path>       Env file. Repeatable, or comma-separated. Default: .env
   -x, --example <path>   Example file. Default: .env.example
       --schema <path>    JSON schema, or another dotenv file. Merged over the example
+      --discover <glob>  Find .env and .env.example pairs. Repeatable (check)
       --strict           Turn undocumented keys into errors (check)
       --no-strict        Leave undocumented keys as warnings
       --ignore <glob>    Do not report extra keys that match. Repeatable (check)
@@ -225,6 +240,8 @@ function validateForCommand(args) {
         return { ok: false, message: '--quiet is only valid with check' };
     if (args.schemaSet)
         return { ok: false, message: '--schema is only valid with check' };
+    if (args.discoverSet)
+        return { ok: false, message: '--discover is only valid with check' };
     if (args.ignoreSet)
         return { ok: false, message: '--ignore is only valid with check' };
     if (args.command === 'init' && args.prune)
