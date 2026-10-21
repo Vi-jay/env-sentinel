@@ -1,9 +1,10 @@
 import { isAbsolute, resolve } from 'node:path';
 import { ignoreMatch } from './config.js';
+import { expandValue } from './expand.js';
 import { maskSecret, valueLength } from './mask.js';
 import { parseEnv } from './parse.js';
 import { loadSchemaFromContents, mergeSchemas } from './schema.js';
-import { containsInterpolation, typeProblem } from './validate.js';
+import { typeProblem } from './validate.js';
 import { readText } from './fsutil.js';
 export function check(options) {
     const cwd = options.cwd ?? process.cwd();
@@ -85,6 +86,12 @@ export function checkContents(input) {
         });
     }
     const schemaNames = new Set(input.schema.variables.map((variable) => variable.name));
+    const lookup = (name) => {
+        const target = parsed.variables.get(name);
+        if (!target?.wellFormed)
+            return undefined;
+        return target.value;
+    };
     for (const variable of input.schema.variables) {
         const entry = parsed.variables.get(variable.name);
         if (!entry) {
@@ -117,9 +124,11 @@ export function checkContents(input) {
             }
             continue;
         }
-        if (!variable.type || containsInterpolation(entry.value))
+        const inspected = inspectExpansion(entry, input.env.path, lookup);
+        findings.push(...inspected.findings);
+        if (inspected.expanded === null || !variable.type)
             continue;
-        const problem = typeProblem(variable.type, entry.value);
+        const problem = typeProblem(variable.type, inspected.expanded);
         if (!problem)
             continue;
         findings.push({
@@ -130,8 +139,8 @@ export function checkContents(input) {
             line: entry.line,
             endLine: entry.endLine,
             key: variable.name,
-            maskedValue: maskSecret(entry.value),
-            valueLength: valueLength(entry.value),
+            maskedValue: maskSecret(inspected.expanded),
+            valueLength: valueLength(inspected.expanded),
         });
     }
     const ignore = input.ignore ?? [];
@@ -150,6 +159,9 @@ export function checkContents(input) {
             line: entry.line,
             key: entry.key,
         });
+        if (!entry.wellFormed || entry.value.trim() === '')
+            continue;
+        findings.push(...inspectExpansion(entry, input.env.path, lookup).findings);
     }
     findings.sort(compareFindings);
     const errors = findings.filter((finding) => finding.severity === 'error').length;
@@ -237,6 +249,50 @@ function finish(files, strict) {
         files,
         summary: { errors, warnings },
     };
+}
+function inspectExpansion(entry, file, lookup) {
+    const expansion = expandValue(entry.value, lookup);
+    if (!expansion.hasReference && expansion.ok) {
+        return { findings: [], expanded: entry.value };
+    }
+    const base = {
+        file,
+        line: entry.line,
+        endLine: entry.endLine,
+        key: entry.key,
+    };
+    if (expansion.depthExceeded || expansion.circularNames.length > 0) {
+        const findings = [];
+        if (expansion.depthExceeded) {
+            findings.push({
+                severity: 'error',
+                code: 'circular-ref',
+                message: 'Variable expansion exceeded the maximum depth',
+                ...base,
+            });
+        }
+        for (const name of expansion.circularNames) {
+            findings.push({
+                severity: 'error',
+                code: 'circular-ref',
+                message: `Circular reference while expanding ${name}`,
+                ...base,
+            });
+        }
+        return { findings, expanded: null };
+    }
+    if (expansion.undefinedNames.length > 0) {
+        return {
+            findings: expansion.undefinedNames.map((name) => ({
+                severity: 'error',
+                code: 'undefined-var',
+                message: `References undefined variable ${name}`,
+                ...base,
+            })),
+            expanded: null,
+        };
+    }
+    return { findings: [], expanded: expansion.value };
 }
 function compareFindings(a, b) {
     const aMissing = a.code === 'missing' ? 1 : 0;

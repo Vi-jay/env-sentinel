@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { HELP, parseArgs } from './args.js';
@@ -49,15 +49,41 @@ export function main(argv, cwd = process.cwd()) {
         process.stderr.write(`env-sentinel: unknown command "${args.command}"\n`);
         return 2;
     }
+    if (args.interactive && !process.stdin.isTTY) {
+        process.stderr.write('env-sentinel: --interactive needs a terminal\n');
+        return 2;
+    }
     const result = sync({
         cwd,
         envPaths: settings.envPaths,
         examplePath: settings.examplePath ?? '.env.example',
         prune: args.prune,
         dryRun: args.dryRun,
+        fix: args.fix,
+        ...(args.interactive ? { confirm: confirmFromTerminal } : {}),
         command: args.command,
     });
     return reportSync(result, args.dryRun);
+}
+function confirmFromTerminal(key) {
+    process.stderr.write(`Add ${key} from the example? [y/N] `);
+    let text = '';
+    const buffer = Buffer.alloc(256);
+    try {
+        for (;;) {
+            const bytes = readSync(process.stdin.fd, buffer, 0, buffer.length, null);
+            if (bytes === 0)
+                break;
+            text += buffer.subarray(0, bytes).toString('utf8');
+            if (text.includes('\n'))
+                break;
+        }
+    }
+    catch {
+        return false;
+    }
+    const answer = text.trim().toLowerCase();
+    return answer === 'y' || answer === 'yes';
 }
 function resolveSettings(args, cwd) {
     const configPath = args.config
@@ -145,24 +171,40 @@ function reportSync(result, dryRun) {
         process.stderr.write(result.changed
             ? `env-sentinel: dry run, ${result.path} was not written\n`
             : `env-sentinel: dry run, ${result.path} is already up to date\n`);
+        reportFill(result, true);
         process.stdout.write(result.contents);
         return 0;
     }
     if (result.wrote && result.created) {
         process.stdout.write(`Created ${result.path} (${String(result.added.length)} keys, values omitted)\n`);
-        return 0;
     }
-    if (result.wrote) {
+    else if (result.wrote) {
         const parts = [`Updated ${result.path}`];
         if (result.added.length > 0)
             parts.push(`+${formatKeys(result.added)}`);
         if (result.removed.length > 0)
             parts.push(`-${formatKeys(result.removed)}`);
         process.stdout.write(`${parts.join(' ')}\n`);
-        return 0;
     }
-    process.stdout.write(`${result.path} is already up to date\n`);
+    else {
+        process.stdout.write(`${result.path} is already up to date\n`);
+    }
+    reportFill(result, false);
     return 0;
+}
+function reportFill(result, dryRun) {
+    const fill = result.envFill;
+    if (!fill || (fill.added.length === 0 && fill.declined.length === 0))
+        return;
+    const sink = dryRun ? process.stderr : process.stdout;
+    const prefix = dryRun ? 'env-sentinel: ' : '';
+    if (fill.added.length > 0) {
+        const verb = dryRun || !fill.wrote ? 'Would add to' : 'Added to';
+        sink.write(`${prefix}${verb} ${fill.path}: ${formatKeys(fill.added)}\n`);
+    }
+    if (fill.declined.length > 0) {
+        sink.write(`${prefix}${dryRun ? 'Would skip' : 'Skipped'} ${formatKeys(fill.declined)}\n`);
+    }
 }
 function formatKeys(keys) {
     if (keys.length <= 8)

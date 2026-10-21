@@ -189,4 +189,23 @@ describe('cli', () => {
     assert.equal(result.status, 2);
     assert.match(result.stderr, /Unknown command/);
   });
+
+  it('fills missing env keys from the example and refuses a non-terminal prompt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env'), `TOKEN=${SECRET}\n`);
+    writeFileSync(join(dir, '.env.example'), 'TOKEN=\n# @type port\nPORT=3000\n');
+    const filled = run(['sync', '--fix', '--env', '.env', '--example', '.env.example'], dir);
+    assert.equal(filled.status, 0);
+    assert.match(filled.stdout, /Added to \.env: PORT/);
+    assert.equal(filled.stdout.includes(SECRET), false);
+    assert.equal(filled.stderr.includes(SECRET), false);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(env, new RegExp(`TOKEN=${SECRET}\\n`));
+    assert.match(env, /PORT=3000\n/);
+
+    const prompted = run(['sync', '--interactive', '--env', '.env', '--example', '.env.example'], dir);
+    assert.equal(prompted.status, 2);
+    assert.match(prompted.stderr, /needs a terminal/);
+    assert.equal(readFileSync(join(dir, '.env'), 'utf8'), env);
+  });
 });

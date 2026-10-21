@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { renderExample, sync } from '../src/sync.js';
+import { fillMissingKeys, renderExample, sync } from '../src/sync.js';
 
 const SECRET = 'super-secret-pass';
 const TOKEN = 'another-secret-value';
@@ -113,5 +113,68 @@ describe('sync', () => {
     assert.equal(result.wrote, false);
     assert.equal(result.contents.includes(TOKEN), false);
     assert.equal(result.contents.includes('TOKEN='), true);
+  });
+
+  it('appends missing example keys without overwriting env values', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env'), `DATABASE_URL=postgres://user:${SECRET}@localhost/db\nEMPTY=\n`);
+    writeFileSync(join(dir, '.env.local'), `PORT=${TOKEN}\n`);
+    writeFileSync(
+      join(dir, '.env.example'),
+      `# database\nDATABASE_URL=postgres://localhost/app\nEMPTY=placeholder\n# @type port\nPORT=3000\n`,
+    );
+    const result = sync({
+      cwd: dir,
+      envPaths: ['.env', '.env.local'],
+      examplePath: '.env.example',
+      command: 'sync',
+      fix: true,
+    });
+    assert.equal(result.envFill?.wrote, true);
+    assert.deepEqual(result.envFill?.added, ['PORT']);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    assert.match(env, new RegExp(`DATABASE_URL=postgres://user:${SECRET}@localhost/db\\n`));
+    assert.match(env, /EMPTY=\n/);
+    assert.match(env, /# @type port\nPORT=3000\n/);
+    assert.equal(env.includes(TOKEN), false);
+    assert.equal(env.includes('placeholder'), false);
+    assert.equal(readFileSync(join(dir, '.env.local'), 'utf8'), `PORT=${TOKEN}\n`);
+    assert.equal(JSON.stringify(result).includes(SECRET), false);
+    assert.equal(JSON.stringify(result).includes(TOKEN), false);
+
+    const again = sync({
+      cwd: dir,
+      envPaths: ['.env'],
+      examplePath: '.env.example',
+      command: 'sync',
+      fix: true,
+    });
+    assert.deepEqual(again.envFill?.added, []);
+    assert.equal(readFileSync(join(dir, '.env'), 'utf8'), env);
+  });
+
+  it('skips keys the confirm callback rejects and does not write on a dry run', () => {
+    const filled = fillMissingKeys('KEEP=1\n', 'KEEP=\nPORT=3000\nOPTIONAL=\n', (key) => key !== 'OPTIONAL');
+    assert.deepEqual(filled.added, ['PORT']);
+    assert.deepEqual(filled.declined, ['OPTIONAL']);
+    assert.match(filled.contents, /KEEP=1\n/);
+    assert.match(filled.contents, /PORT=3000\n/);
+    assert.equal(filled.contents.includes('OPTIONAL='), false);
+
+    const dir = mkdtempSync(join(tmpdir(), 'env-sentinel-'));
+    writeFileSync(join(dir, '.env'), 'KEEP=1\n');
+    writeFileSync(join(dir, '.env.example'), 'KEEP=\nPORT=3000\n');
+    const dry = sync({
+      cwd: dir,
+      envPaths: ['.env'],
+      examplePath: '.env.example',
+      command: 'sync',
+      fix: true,
+      dryRun: true,
+    });
+    assert.equal(dry.envFill?.changed, true);
+    assert.equal(dry.envFill?.wrote, false);
+    assert.deepEqual(dry.envFill?.added, ['PORT']);
+    assert.equal(readFileSync(join(dir, '.env'), 'utf8'), 'KEEP=1\n');
   });
 });
